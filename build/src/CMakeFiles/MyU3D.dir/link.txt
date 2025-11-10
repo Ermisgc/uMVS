@@ -1,0 +1,3 @@
+"D:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E rm -f CMakeFiles\MyU3D.dir/objects.a
+D:\PROGRA~1\mingw64\bin\ar.exe qc CMakeFiles\MyU3D.dir/objects.a @CMakeFiles\MyU3D.dir\objects1.rsp
+D:\PROGRA~1\mingw64\bin\G__~1.EXE -g -Wl,--whole-archive CMakeFiles\MyU3D.dir/objects.a -Wl,--no-whole-archive -o MyU3D.exe -Wl,--out-implib,libMyU3D.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\MyU3D.dir\linkLibs.rsp
