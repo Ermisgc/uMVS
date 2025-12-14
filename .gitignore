@@ -1,0 +1,17 @@
+*
+
+!inc/
+!inc/**
+
+!.gitignore
+!CMakeLists.txt
+!.autobuild.sh
+
+!src
+!src/**
+
+!cmake/
+!cmake/**
+
+!test/
+!test/**
