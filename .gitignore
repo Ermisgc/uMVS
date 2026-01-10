@@ -5,7 +5,7 @@
 
 !.gitignore
 !CMakeLists.txt
-!.autobuild.sh
+!autobuild.sh
 
 !src
 !src/**

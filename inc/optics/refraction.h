@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <optional>
 
-NAMESPACE_BEGIN{ namespace refract {
+NAMESPACE_BEGIN{ namespace optics {
     /**
      * @brief 小值
      * 用于数值的稳定性，避免除0错误
@@ -42,6 +42,18 @@ NAMESPACE_BEGIN{ namespace refract {
         Vec3d d;        ///< 射线的方向向量
         Ray():o(0.0, 0.0, 0.0),d(0.0, 0.0, 1.0){}
         Ray(const Vec3d& o, const Vec3d& d):o(o),d(normalize(d)){}
+    };
+
+    /**
+     * @brief 折射界面，描述为一个平面和入射出射介质的折射率
+     * @attention plane的方向向量在设定中，应该由介质1指向介质2，如果弄反了，会导致计算错误
+     */
+    struct RefractiveInterface{
+        Plane plane;    ///< 折射界面的平面
+        double n1;      ///< 入射介质的折射率
+        double n2;      ///< 出射介质的折射率
+        RefractiveInterface():plane(), n1(1.0),n2(1.0){}
+        RefractiveInterface(const Plane& p, double n1, double n2):plane(p),n1(n1),n2(n2){}
     };
 
     /**
@@ -97,18 +109,6 @@ NAMESPACE_BEGIN{ namespace refract {
         T = eta * Iu + (cosThetaT - eta * cosThetaI) * Nu;  // 分解为垂直于法线和平行于发线的分量
         return T;
     }
-
-    /**
-     * @brief 折射界面，描述为一个平面和入射出射介质的折射率
-     * @attention plane的方向向量在设定中，应该由介质1指向介质2，如果弄反了，会导致计算错误
-     */
-    struct RefractiveInterface{
-        Plane plane;    ///< 折射界面的平面
-        double n1;      ///< 入射介质的折射率
-        double n2;      ///< 出射介质的折射率
-        RefractiveInterface():plane(), n1(1.0),n2(1.0){}
-        RefractiveInterface(const Plane& p, double n1, double n2):plane(p),n1(n1),n2(n2){}
-    };
 
     /**
      * @brief 射线追踪，穿过多个折射界面

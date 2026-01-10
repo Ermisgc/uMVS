@@ -1,8 +1,0 @@
-[
-{
-  "directory": "D:/cpp_project/my_u3d/build/src",
-  "command": "D:\\PROGRA~1\\mingw64\\bin\\G__~1.EXE  @CMakeFiles/MyU3D.dir/includes_CXX.rsp -g -std=gnu++17 -o CMakeFiles\\MyU3D.dir\\main.cpp.obj -c D:\\cpp_project\\my_u3d\\src\\main.cpp",
-  "file": "D:/cpp_project/my_u3d/src/main.cpp",
-  "output": "src/CMakeFiles/MyU3D.dir/main.cpp.obj"
-}
-]
