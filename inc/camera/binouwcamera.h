@@ -34,6 +34,15 @@ NAMESPACE_BEGIN { namespace camera {
     private:
         MonocularUWCamera left_camera_;     ///< 左侧水下单目相机
         MonocularUWCamera right_camera_;    ///< 右侧水下单目相机
+        cv::Mat left_map_x_;    ///< 左相机的remap x映射
+        cv::Mat left_map_y_;    ///< 左相机的remap y映射
+        cv::Mat right_map_x_;   ///< 右相机的remap x映射
+        cv::Mat right_map_y_;   ///< 右相机的remap y映射
+        Matx33d R_l2r;                  ///< 左相机到右相机的旋转矩阵
+        Vec3d t_l2r;                    ///< 左相机到右相机的平移向量
+        Matx33d R_rel_norm;             ///< 左相机到右相机的旋转矩阵（折射轴归一化后）
+        Vec3d T_rel_norm;               ///< 左相机到右相机的平移向量（折射轴归一化后）
+        Size imgSize;                   ///< 图像尺寸
 
     public:
         BinoUWCamera() = default;
@@ -44,7 +53,10 @@ NAMESPACE_BEGIN { namespace camera {
          * @param right 右相机模型
          */
         BinoUWCamera(const MonocularUWCamera& left, const MonocularUWCamera& right) 
-            : left_camera_(left), right_camera_(right) {}
+            : left_camera_(left), right_camera_(right) 
+        {
+            initRemap(left, right);
+        }
 
         /**
          * @brief 获取左相机引用
@@ -102,10 +114,46 @@ NAMESPACE_BEGIN { namespace camera {
         void write(cv::FileStorage& fs) const;
 
         /**
+         * @brief 把本对象序列化到文件中
+         * @param filename 文件名
+         */
+        void write(const std::string& filename) const;
+
+        /**
          * @brief 从文件中读取本对象
          * @param fs 文件存储对象
          */
         void read(const cv::FileNode& fs);
+
+        /**
+         * @brief 从文件中读取本对象
+         * @param filename 文件名
+         */
+        void read(const std::string& filename);
+
+        /**
+         * @brief 立体校正，空气中的立体校正采用Bonguet方法，最大化共视图面积
+         * @param left_img 左相机图像
+         * @param right_img 右相机图像
+         * @return std::pair<cv::Mat, cv::Mat> 校正后的左右相机图像
+         */
+        std::pair<cv::Mat, cv::Mat> rectify(const cv::Mat& left_img, const cv::Mat& right_img) const;
+
+        /**
+         * @brief 打印本对象的信息
+         * @param os 输出流对象
+         * @param camera 双目相机模型对象
+         * @return std::ostream& 输出流对象
+         */
+        friend std::ostream& operator<<(std::ostream& os, const BinoUWCamera& camera);
+
+    private:
+        /**
+         * @brief 初始化remap函数
+         * @param left_camera 左相机模型
+         * @param right_camera 右相机模型
+         */
+        void initRemap(const MonocularUWCamera& left_camera, const MonocularUWCamera& right_camera);        
     };
 
 }}

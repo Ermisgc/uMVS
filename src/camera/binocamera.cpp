@@ -47,7 +47,7 @@ NAMESPACE_BEGIN{namespace camera{
 
     void BinocularCamera::initRemap(const CameraModel& left_camera, const CameraModel& right_camera){
         this->imgSize = left_camera.imageSize;
-        //根据已经表情好的双目相机模型，求校正时remap，采用Bongeut方法
+        //根据已经标定好的双目相机模型，求校正时remap，采用Bongeut方法
         Matx33d K_l = left_camera.K, K_r = right_camera.K;
         Vec5d D_l = left_camera.D, D_r = right_camera.D;
         Size imgSize = left_camera.imageSize;

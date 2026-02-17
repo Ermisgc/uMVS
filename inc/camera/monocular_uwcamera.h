@@ -26,6 +26,8 @@ NAMESPACE_BEGIN { namespace camera {
         ITERATE = 0,    ///< 迭代法
         ANALYTIC = 1,   ///< 解析法
         GEOMETRIC = 2,  ///< 几何法
+        ANALYTIC_2 = 3, ///< 解析法2，方法和ANALYTIC相同，但是采用OpenCV的solvePoly求解，很慢
+        ITERATE_HELLAY = 4, ///< 迭代法2，采用Hellay迭代法
     };
 
     /**
@@ -37,6 +39,7 @@ NAMESPACE_BEGIN { namespace camera {
      * @param refraction_planes_ 折射平面集合，理论上有一个玻璃，对应两个折射平面
      */
     class MonocularUWCamera {
+    public:
         CameraModel camera_model_;                                       ///< 针孔相机模型
         std::vector<optics::RefractiveInterface> refraction_planes_;     ///< 折射界面集合，这里按从近到远的顺序存储
 
@@ -47,7 +50,7 @@ NAMESPACE_BEGIN { namespace camera {
         double d_housing_;  ///<  housing的厚度
         double d_glass_;    ///< 玻璃的厚度
         Vec3d glass_normal_;  ///< 玻璃的法线
-    public:
+    
         MonocularUWCamera() = default;
         /**
          * @brief 从已经构造好的针孔相机模型、两个折射平面来构造水下单目相机模型
@@ -146,10 +149,24 @@ NAMESPACE_BEGIN { namespace camera {
         void write(cv::FileStorage& fs) const;
 
         /**
+         * @brief 把本对象序列化到文件中
+         * @param filename 文件名
+         */
+        void write(const std::string& filename) const;
+
+        /**
          * @brief 从文件中读取本对象
          * @param fs 文件存储对象
          */
         void read(const cv::FileNode& fs);
+
+        /**
+         * @brief 从文件中读取本对象
+         * @param filename 文件名
+         */
+        void read(const std::string& filename);
+
+        friend std::ostream& operator<<(std::ostream& os, const MonocularUWCamera& camera);
     private:
         /**
          * @brief 水下单目相机的正向投影方法，采用不动点迭代法求解
@@ -188,6 +205,31 @@ NAMESPACE_BEGIN { namespace camera {
          * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
          */
         std::optional<Point2d> solveGeometric(const Vec3d& pc) const;
+
+        /**
+         * @brief 水下单目相机的正向投影方法，解析法2求解
+         * 
+         * 这里参考了Agrawal et al. CVPR 2012的论文
+         * 经过他的补充材料的推导，在单层折射时，解析解将变为求界面径向距离r的四次方程
+         * 在双层折射时，解析解将变为求解界面径向距离r的四次或十二次方程
+         * 对于四次以上的方程，其求解非常不稳定，因此这里的解析解法会把模型简化为单层折射
+         * 与解析法不同的是，这里会直接忽略玻璃，只考虑水面以下的点
+         * @param pc 相机坐标系下的点
+         * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
+         */
+        std::optional<Point2d> solveAnalytic2(const Vec3d& pc) const;
+
+        /**
+         * @brief 水下单目相机的正向投影方法，利用哈雷迭代法求解
+         * 
+         * 这里参考了Hellay et al. CVPR 2016的论文
+         * 该方法采用迭代法求解，初始值为简单的针孔投影，每次迭代利用反向光线追踪得到射线 R
+         * 计算 R 在目标深度pc.z的虚拟点P_virtual，然后利用焦距将误差映射回像素域
+         * 更新迭代值uv，直到收敛或达到最大迭代次数
+         * @param pc 相机坐标系下的点
+         * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
+         */
+        std::optional<Point2d> solveIterateHellay(const Vec3d& pc) const;
     };
 
     /**
@@ -213,6 +255,14 @@ NAMESPACE_BEGIN { namespace camera {
         if(fs.empty()) camera = default_value;
         else camera.read(fs);
     }
+
+    /**
+     * @brief 水下单目相机的标定方法
+     * 
+     * @param glass_normal 玻璃法线，单位向量
+     * @return Matx33d 旋转矩阵，将玻璃法线对齐到z轴
+     */
+    Matx33d alignAxisToZ(Vec3d glass_normal);
 }}
 
 #endif  // U3D_MONO_UWCAMERA_H

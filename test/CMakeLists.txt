@@ -15,3 +15,15 @@ target_link_libraries(04_test_uw_epipolar ${PROJECT_NAME} ${ALL_LIBS})
 
 add_executable(99_test_svd 99_test_svd.cpp)
 target_link_libraries(99_test_svd ${PROJECT_NAME} ${ALL_LIBS})
+
+add_executable(05_test_quartic_solver 05_test_quartic_solver.cpp)
+target_link_libraries(05_test_quartic_solver ${PROJECT_NAME} ${ALL_LIBS})
+
+add_executable(06_test_reprojection_error 06_test_reprojection_error.cpp)
+target_link_libraries(06_test_reprojection_error ${PROJECT_NAME} ${ALL_LIBS})
+
+add_executable(07_test_stereo_rectify 07_test_stereo_rectify.cpp)
+target_link_libraries(07_test_stereo_rectify ${PROJECT_NAME} ${ALL_LIBS})
+
+add_executable(98_test_single_solver 98_test_single_solver.cpp)
+target_link_libraries(98_test_single_solver ${PROJECT_NAME} ${ALL_LIBS})

@@ -1,16 +1,30 @@
 /**
- * @file 03_test_rectify.cpp
- * @brief 空气中双目相机模型的立体校正：输入相机模型和左右目图像，输出校正后的左右目图像
- * 本模型不涉及到折射，因此不考虑折射时的误差
- * @example
- * ./bin/Release/03_test_rectify --model ./binocam_0310.yml --left ./left.png --right ./right.png 
- * --left_out ./left_output.png --right_out ./right_output.png --combine_out ./combine_output.png
+ * @file 07_test_stereo_rectify.cpp
+ * @brief 水下双目相机的重投影误差
+ * @version 0.1
+ * @date 2026-02-15
+ * @example 07_test_stereo_rectify.exe -c binouwcam_1110.yaml
+ * @copyright Copyright (c) 2026
+ * 
  */
 
-#include "camera/binocamera.h"
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <limits>
+#include <iomanip>
+#include <opencv2/opencv.hpp>
+#include <fstream>
 #include "argparse/argparse.hpp"
-int main(int argc, char *argv[]){
-    argparse::ArgumentParser program("03_test_rectify");
+#include "camera/binouwcamera.h"
+
+using namespace NAMESPACE_U3D;
+using namespace NAMESPACE_U3D::optics; 
+using namespace NAMESPACE_U3D::camera;
+
+int main(int argc, char** argv) {
+    
+    argparse::ArgumentParser program("07_test_stereo_rectify");
     program.add_argument("--model", "-m").required().help("Path to the binocular camera model file");
     program.add_argument("--left", "-l").required().help("Path to the left image file");
     program.add_argument("--right", "-r").required().help("Path to the right image file");
@@ -18,6 +32,7 @@ int main(int argc, char *argv[]){
     program.add_argument("--left_out", "-lo").help("Path to the left output image file");
     program.add_argument("--right_out", "-ro").help("Path to the right output image file");
     program.add_argument("--combine_out", "-co").help("Path to the combine output image file");
+
     try{
         program.parse_args(argc, argv);
     } catch(const std::exception& e){
@@ -43,7 +58,7 @@ int main(int argc, char *argv[]){
     std::cout << ">>> show: " << show << std::endl;
 
     // 加载双目相机模型
-    NAMESPACE_U3D::camera::BinocularCamera camera;
+    BinoUWCamera camera;
     cv::FileStorage fs(modelPath, cv::FileStorage::READ);
     if(!fs.isOpened()){
         std::cerr << "Error: Failed to open model file." << std::endl;
@@ -114,3 +129,4 @@ int main(int argc, char *argv[]){
 
     return 0;
 }
+

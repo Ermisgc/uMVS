@@ -45,7 +45,8 @@ int main() {
         0.0,    0.0,    1.0);
 
     // 畸变系数 (k1, k2, p1, p2, k3) - 加一点畸变增加测试难度
-    cv::Mat D = (cv::Mat_<double>(1, 5) << -0.1, 0.01, 0.001, 0.001, 0.0);
+    // cv::Mat D = (cv::Mat_<double>(1, 5) << -0.1, 0.01, 0.001, 0.001, 0.0);
+    cv::Mat D = (cv::Mat_<double>(1, 5) << 0.0, 0.0, 0.0, 0.0, 0.0);
 
     // 外参 (R, t) - 设为单位阵，方便理解，即 相机系 = 世界系
     cv::Mat R = cv::Mat::eye(3, 3, CV_64F);
@@ -95,7 +96,7 @@ int main() {
 
         // Step B: 正向投影 (World Point -> Pixel)
         // 使用默认的 ITERATE 方法
-        auto pixel_reproj_opt = uw_cam.forwardProject(Pw);
+        auto pixel_reproj_opt = uw_cam.forwardProject(Pw, ForwardMethod::ANALYTIC);
 
         if (!pixel_reproj_opt.has_value()) {
             std::cout << "[ERROR] Forward project failed for 3D Point: " << Pw << std::endl;
@@ -111,13 +112,11 @@ int main() {
         printResult(label, pixel, pixel_reproj, error);
 
         // --- 额外验证：对比如果不考虑折射会怎样 ---
-        // 这是一个很有趣的对比，展示了你的算法的价值
         auto pinhole_proj = pinhole.worldToPixel(Pw); 
         if(pinhole_proj) {
             cv::Vec2d pixel_vec = cv::Vec2d(pixel_reproj.x, pixel_reproj.y);
             double pinhole_error = cv::norm(pixel_vec - pinhole_proj.value());
             std::cout << "  (Compare: Pure Pinhole Error would be: " << pinhole_error << " px)" << std::endl; 
-            // 预期：边缘处的 pinhole_error 应该很大 (比如几十个像素)，证明水下折射不可忽略
         }
         std::cout << std::endl;
     }
