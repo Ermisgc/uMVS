@@ -1,8 +1,8 @@
 add_executable(00_test_camera_model 00_test_camera_model.cpp)
 target_link_libraries(00_test_camera_model ${PROJECT_NAME} ${ALL_LIBS})
 
-add_executable(01_test_calibration 01_test_calibration.cpp)
-target_link_libraries(01_test_calibration ${PROJECT_NAME} ${ALL_LIBS})
+add_executable(calibrateMono 01_test_calibration.cpp)
+target_link_libraries(calibrateMono ${PROJECT_NAME} ${ALL_LIBS})
 
 add_executable(02_test_uwcamera 02_test_uwcamera.cpp)
 target_link_libraries(02_test_uwcamera ${PROJECT_NAME} ${ALL_LIBS})
@@ -24,6 +24,9 @@ target_link_libraries(06_test_reprojection_error ${PROJECT_NAME} ${ALL_LIBS})
 
 add_executable(07_test_stereo_rectify 07_test_stereo_rectify.cpp)
 target_link_libraries(07_test_stereo_rectify ${PROJECT_NAME} ${ALL_LIBS})
+
+add_executable(08_vertical_error_of_rectify 08_vertical_error_of_rectify.cpp)
+target_link_libraries(08_vertical_error_of_rectify ${PROJECT_NAME} ${ALL_LIBS})
 
 add_executable(98_test_single_solver 98_test_single_solver.cpp)
 target_link_libraries(98_test_single_solver ${PROJECT_NAME} ${ALL_LIBS})

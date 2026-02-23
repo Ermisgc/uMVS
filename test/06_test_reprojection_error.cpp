@@ -12,10 +12,11 @@
 #include <cmath>
 #include <limits>
 #include <iomanip>
+#include <chrono>
 #include <opencv2/opencv.hpp>
 #include <fstream>
 
-#include "camera/monocular_uwcamera.h"
+#include "camera/monouwcamera.h"
 #include "camera/binouwcamera.h"
 #include "argparse/argparse.hpp"
 using namespace cv;
@@ -40,7 +41,7 @@ int main(int argc, char** argv) {
     std::cout << "Depth in water: " << depth_in_water << std::endl;
     std::cout << "Camera path: " << camera_path << std::endl;
 
-    MonocularUWCamera uw_cam;
+    MonoUWCamera uw_cam;
     uw_cam.read(camera_path);
     
     int H = uw_cam.camera_model_.imageSize.height;
@@ -55,13 +56,16 @@ int main(int argc, char** argv) {
 
     std::cout << "Starting full resolution test (" << W << "x" << H << ")..." << std::endl;
 
+    //记录开始时间
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     // --- 循环遍历所有像素 ---
     for (int v = 0; v < H; ++v) {
         if (v % 100 == 0) std::cout << "Rows processed: " << v << " / " << H << "\r" << std::flush;
         for (int u = 0; u < W; ++u) {
             Vec2d pixel_start(u, v);
             Vec3d p_world = uw_cam.backwardProject(pixel_start, depth_in_water).value();
-            auto ret = uw_cam.forwardProject(p_world, ForwardMethod::ANALYTIC);
+            auto ret = uw_cam.forwardProject(p_world, ForwardMethod::ITERATE_HELLAY);
             
             if(ret) {
                 Vec2d pixel_pred = ret.value();
@@ -74,7 +78,8 @@ int main(int argc, char** argv) {
             } 
         }
     }
-
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     std::cout << "=== Test Results ===" << std::endl;
     if (valid_count > 0) {
         double mean_error = sum_error / valid_count;
@@ -84,6 +89,8 @@ int main(int argc, char** argv) {
         std::cout << "Max Error:    " << max_error << " px" << std::endl;
         std::cout << "Mean Error:   " << mean_error << " px" << std::endl;
         std::cout << "RMSE:         " << rmse << " px" << std::endl;
+        std::cout << "Time:         " << duration.count() << " ms" << std::endl;
+        std::cout << "Time per pixel: " << duration.count() * 1.0 / (H * W) << " ms" << std::endl;
 
         // --- 判定标准 ---
         if (max_error < 0.1) {
@@ -105,8 +112,8 @@ int main(int argc, char** argv) {
         applyColorMap(error_vis, error_vis, COLORMAP_JET);
         
         // 在图像上写上最大误差
-        // std::string msg = "Max Err: " + std::to_string(max_error) + " px";
-        // putText(error_vis, msg, Point(20, 50), FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255, 255, 255), 2);
+        std::string msg = "Max Err: " + std::to_string(max_error) + " px";
+        putText(error_vis, msg, Point(20, 50), FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255, 255, 255), 2);
 
         imwrite("reprojection_error_heatmap.png", error_vis);
         std::cout << "Saved error heatmap to 'reprojection_error_heatmap.png'" << std::endl;

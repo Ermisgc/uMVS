@@ -1,6 +1,6 @@
 /**
  * @file 07_test_stereo_rectify.cpp
- * @brief 水下双目相机的重投影误差
+ * @brief 水下双目相机的题例校正误差
  * @version 0.1
  * @date 2026-02-15
  * @example 07_test_stereo_rectify.exe -c binouwcam_1110.yaml

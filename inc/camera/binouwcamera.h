@@ -16,14 +16,14 @@
 #include <vector>
 #include <algorithm>
 #include "utils.h"
-#include "monocular_uwcamera.h"
+#include "monouwcamera.h"
 
 NAMESPACE_BEGIN { namespace camera {
 
     /**
      * @brief 水下双目相机模型
      * 
-     * 该类封装了左右两个 MonocularUWCamera 对象。
+     * 该类封装了左右两个 MonoUWCamera 对象。
      * 重要假设：
      * 1. 两个单目相机的外参（Pose）必须定义在同一个世界坐标系下。
      *    通常习惯将左相机坐标系设为世界坐标系（即左相机 R=I, t=0），
@@ -32,8 +32,8 @@ NAMESPACE_BEGIN { namespace camera {
      */
     class BinoUWCamera {
     private:
-        MonocularUWCamera left_camera_;     ///< 左侧水下单目相机
-        MonocularUWCamera right_camera_;    ///< 右侧水下单目相机
+        MonoUWCamera left_camera_;     ///< 左侧水下单目相机
+        MonoUWCamera right_camera_;    ///< 右侧水下单目相机
         cv::Mat left_map_x_;    ///< 左相机的remap x映射
         cv::Mat left_map_y_;    ///< 左相机的remap y映射
         cv::Mat right_map_x_;   ///< 右相机的remap x映射
@@ -52,7 +52,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param left 左相机模型
          * @param right 右相机模型
          */
-        BinoUWCamera(const MonocularUWCamera& left, const MonocularUWCamera& right) 
+        BinoUWCamera(const MonoUWCamera& left, const MonoUWCamera& right) 
             : left_camera_(left), right_camera_(right) 
         {
             initRemap(left, right);
@@ -61,12 +61,12 @@ NAMESPACE_BEGIN { namespace camera {
         /**
          * @brief 获取左相机引用
          */
-        inline const MonocularUWCamera& left() const { return left_camera_; }
+        inline const MonoUWCamera& left() const { return left_camera_; }
 
         /**
          * @brief 获取右相机引用
          */
-        inline const MonocularUWCamera& right() const { return right_camera_; }
+        inline const MonoUWCamera& right() const { return right_camera_; }
 
         /**
          * @brief 计算广义对极曲线（Generalized Epipolar Curve）
@@ -153,7 +153,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param left_camera 左相机模型
          * @param right_camera 右相机模型
          */
-        void initRemap(const MonocularUWCamera& left_camera, const MonocularUWCamera& right_camera);        
+        void initRemap(const MonoUWCamera& left_camera, const MonoUWCamera& right_camera);        
     };
 
 }}

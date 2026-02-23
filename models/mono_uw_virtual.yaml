@@ -1,0 +1,23 @@
+%YAML:1.0
+---
+camera_model:
+   imageSize: [ 4096, 3000 ]
+   K: !!opencv-matrix
+      rows: 3
+      cols: 3
+      dt: d
+      data: [ 2600., 0., 2048, 0.,
+          2.5950987982428869e+03, 1500, 0., 0., 1. ]
+   D: [ 0., 0., 0., 0., 0. ]
+   R_w2c: !!opencv-matrix
+      rows: 3
+      cols: 3
+      dt: d
+      data: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
+   t_w2c: [ 0., 0., 0. ]
+n_air: 1.
+n_glass: 1.5000000000000000e+00
+n_water: 1.3330000000000000e+00
+d_housing: 2.0242599999999999e+01
+d_glass: 5.
+glass_normal: [ 0.1294, 0., 0.9916 ]

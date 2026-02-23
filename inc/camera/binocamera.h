@@ -1,17 +1,17 @@
 #ifndef BINOCAMERA_H
 #define BINOCAMERA_H
 #include "utils.h"
-#include "camera/camera_model.h"
+#include "camera/monocamera.h"
 
 NAMESPACE_BEGIN{ namespace camera{
     /**
      * @brief 双目相机模型
      * 
      */
-    class BinocularCamera{
+    class BinoCamera{
     public:
-        CameraModel left_camera;        ///< 左相机模型
-        CameraModel right_camera;       ///< 右相机模型
+        MonoCamera left_camera;        ///< 左相机模型
+        MonoCamera right_camera;       ///< 右相机模型
     private:
         Matx33d R_l2r;                  ///< 左相机到右相机的旋转矩阵
         Vec3d t_l2r;                    ///< 左相机到右相机的平移向量
@@ -19,9 +19,9 @@ NAMESPACE_BEGIN{ namespace camera{
         cv::Mat mapl1, mapl2, mapr1, mapr2;  ///< remap的函数
         bool is_init = false;           ///< 是否初始化
     public:
-        BinocularCamera() = default;
-        BinocularCamera(const CameraModel& left_camera, const CameraModel& right_camera);
-        ~BinocularCamera() = default;
+        BinoCamera() = default;
+        BinoCamera(const MonoCamera& left_camera, const MonoCamera& right_camera);
+        ~BinoCamera() = default;
 
         /**
          * @brief 立体校正，空气中的立体校正采用Bonguet方法，最大化共视图面积
@@ -49,14 +49,14 @@ NAMESPACE_BEGIN{ namespace camera{
          * @param camera 双目相机模型对象
          * @return std::ostream& 输出流对象
          */
-        friend std::ostream& operator<<(std::ostream& os, const BinocularCamera& camera);
+        friend std::ostream& operator<<(std::ostream& os, const BinoCamera& camera);
     private:
         /**
          * @brief 初始化remap函数
          * @param left_camera 左相机模型
          * @param right_camera 右相机模型
          */
-        void initRemap(const CameraModel& left_camera, const CameraModel& right_camera);
+        void initRemap(const MonoCamera& left_camera, const MonoCamera& right_camera);
     };
 
 }}

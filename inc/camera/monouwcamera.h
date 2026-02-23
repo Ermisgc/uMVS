@@ -1,5 +1,5 @@
 /**
- * @file monocular_uwcamera.h
+ * @file monouwcamera.h
  * @author Ermis
  * @brief 定义了水下单目相机模型，该相机由一个普通针孔相机、两个相平行的折射平面组成
  * 实现了该相机的正向投影和反向投影计算方法
@@ -13,14 +13,16 @@
 #ifndef U3D_MONO_UWCAMERA_H
 #define U3D_MONO_UWCAMERA_H
 #include "utils.h"
-#include "camera/camera_model.h"
+#include "camera/monocamera.h"
 NAMESPACE_BEGIN { namespace camera {
     /**
      * @brief 水下单目相机模型的正向投影解法
-     * 这里主要实现了水下单目相机的几种正向投影方法
-     * 迭代法：采用Gauss-Newton迭代法求解，初始值为针孔相机的投影中心
-     * 解析法：直接求解折射界面的四次方程
-     * 几何法：这里采用我的方法，一个假想的与玻璃法线重合的虚拟相机坐标系，然后基于该虚拟相机坐标系求初值解
+     * **ITERATE** 迭代法：采用Gauss-Newton迭代法求解，初始值为针孔相机的投影中心
+     * **ANALYTIC** 解析法：求解近似折射界面后的四次方程，使用optics/quadratic_solver.h中的四次方程求解器求解
+     * **GEOMETRIC** 几何法：这里采用我的方法，一个假想的与玻璃法线重合的虚拟相机坐标系，然后基于该虚拟相机坐标系求初值解
+     * **ANALYTIC_2** 解析法2：（不推荐使用）求解近似折射界面后的四次方程，使用OpenCV的solvePoly求解，
+     * **ITERATE_HELLAY** 迭代法2：采用Hellay迭代法求解，初始值为针孔相机的投影中心
+     * **ANALYTIC_ACCURATE** 解析法3：（不推荐使用）采用Agrewal十二次方程精确求解，采用Eigen求解
      */
     enum class ForwardMethod{
         ITERATE = 0,    ///< 迭代法
@@ -28,6 +30,7 @@ NAMESPACE_BEGIN { namespace camera {
         GEOMETRIC = 2,  ///< 几何法
         ANALYTIC_2 = 3, ///< 解析法2，方法和ANALYTIC相同，但是采用OpenCV的solvePoly求解，很慢
         ITERATE_HELLAY = 4, ///< 迭代法2，采用Hellay迭代法
+        ANALYTIC_ACCURATE = 5,  ///< Agrewal十二次方程精确求解，不推荐使用，因为很慢效率低
     };
 
     /**
@@ -38,9 +41,9 @@ NAMESPACE_BEGIN { namespace camera {
      * @param camera_model_ 针孔相机模型
      * @param refraction_planes_ 折射平面集合，理论上有一个玻璃，对应两个折射平面
      */
-    class MonocularUWCamera {
+    class MonoUWCamera {
     public:
-        CameraModel camera_model_;                                       ///< 针孔相机模型
+        MonoCamera camera_model_;                                       ///< 针孔相机模型
         std::vector<optics::RefractiveInterface> refraction_planes_;     ///< 折射界面集合，这里按从近到远的顺序存储
 
         // 物理参数的缓存
@@ -51,7 +54,7 @@ NAMESPACE_BEGIN { namespace camera {
         double d_glass_;    ///< 玻璃的厚度
         Vec3d glass_normal_;  ///< 玻璃的法线
     
-        MonocularUWCamera() = default;
+        MonoUWCamera() = default;
         /**
          * @brief 从已经构造好的针孔相机模型、两个折射平面来构造水下单目相机模型
          * @param camera_model 针孔相机模型
@@ -59,7 +62,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param p2 第二个折射界面
          * @details RefractiveInterface的方程为n · x + d = 0，这里的x应该看作是相机坐标系下的坐标
          */
-        MonocularUWCamera(const CameraModel& camera_model, const optics::RefractiveInterface& p1, const optics::RefractiveInterface& p2);
+        MonoUWCamera(const MonoCamera& camera_model, const optics::RefractiveInterface& p1, const optics::RefractiveInterface& p2);
 
         /**
          * @brief 从已经构造好的针孔相机模型、标定好的光心到玻璃的距离、玻璃厚度、折射率等参数来构造水下单目相机模型
@@ -72,9 +75,9 @@ NAMESPACE_BEGIN { namespace camera {
          * @param glass_normal 玻璃的法线，这里要注意玻璃的法线方向由光心指向相机外，如果不是这样的话，函数内部会自动取反
          * @details 构造函数内部将自己构造和装配折射平面
          */
-        MonocularUWCamera(const CameraModel& camera_model, double d1, double d2, double n0, double n1, double n2, const Vec3d& glass_normal);
+        MonoUWCamera(const MonoCamera& camera_model, double d1, double d2, double n0, double n1, double n2, const Vec3d& glass_normal);
 
-        inline const CameraModel & pinhole() const { return camera_model_; }
+        inline const MonoCamera & pinhole() const { return camera_model_; }
         /**
          * @brief 水下单目相机的正向投影方法，计算世界坐标系下的点的像素投影
          * @param world_point 世界坐标系下的点
@@ -166,7 +169,7 @@ NAMESPACE_BEGIN { namespace camera {
          */
         void read(const std::string& filename);
 
-        friend std::ostream& operator<<(std::ostream& os, const MonocularUWCamera& camera);
+        friend std::ostream& operator<<(std::ostream& os, const MonoUWCamera& camera);
     private:
         /**
          * @brief 水下单目相机的正向投影方法，采用不动点迭代法求解
@@ -207,13 +210,8 @@ NAMESPACE_BEGIN { namespace camera {
         std::optional<Point2d> solveGeometric(const Vec3d& pc) const;
 
         /**
-         * @brief 水下单目相机的正向投影方法，解析法2求解
-         * 
-         * 这里参考了Agrawal et al. CVPR 2012的论文
-         * 经过他的补充材料的推导，在单层折射时，解析解将变为求界面径向距离r的四次方程
-         * 在双层折射时，解析解将变为求解界面径向距离r的四次或十二次方程
-         * 对于四次以上的方程，其求解非常不稳定，因此这里的解析解法会把模型简化为单层折射
-         * 与解析法不同的是，这里会直接忽略玻璃，只考虑水面以下的点
+         * @brief 水下单目相机的正向投影方法，解析法2求解，它与solveAnalytic的区别在于：
+         * 本方法求解四次方程用的是Opencv的solvePoly方法，可以与解析法1做对比看看谁快
          * @param pc 相机坐标系下的点
          * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
          */
@@ -230,6 +228,14 @@ NAMESPACE_BEGIN { namespace camera {
          * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
          */
         std::optional<Point2d> solveIterateHellay(const Vec3d& pc) const;
+
+        /**
+         * @brief 水下单目相机的正向投影方法，精确解析法求解-求解十二次方程
+         * 这里参考了Agrawal et al. CVPR 2012的论文
+         * @param pc 相机坐标系下的点
+         * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
+         */
+        std::optional<Point2d> solveAnalyticAccurate(const Vec3d& pc) const;
     };
 
     /**
@@ -243,24 +249,24 @@ NAMESPACE_BEGIN { namespace camera {
      * @param verbose 是否打印和显示详细信息，默认值为false
      * @return double 标定误差，单位为mm
      */
-    double calibrate(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, const CameraModel& camera_model, MonocularUWCamera& uw_camera, bool verbose = false);
+    double calibrate(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, const MonoCamera& camera_model, MonoUWCamera& uw_camera, bool verbose = false);
 
-    double calibrate(const std::string & imagePath, cv::Size boardSize, double squareSize, const CameraModel& camera_model, MonocularUWCamera& uw_camera, bool verbose = false);
+    double calibrate(const std::string & imagePath, cv::Size boardSize, double squareSize, const MonoCamera& camera_model, MonoUWCamera& uw_camera, bool verbose = false);
 
-    static inline void write(cv::FileStorage& fs, const std::string& name, const MonocularUWCamera& camera) {
+    static inline void write(cv::FileStorage& fs, const std::string& name, const MonoUWCamera& camera) {
         camera.write(fs);
     }
 
-    static inline void read(const cv::FileNode& fs, MonocularUWCamera & camera,const MonocularUWCamera& default_value = MonocularUWCamera()) {
+    static inline void read(const cv::FileNode& fs, MonoUWCamera & camera,const MonoUWCamera& default_value = MonoUWCamera()) {
         if(fs.empty()) camera = default_value;
         else camera.read(fs);
     }
 
     /**
-     * @brief 水下单目相机的标定方法
+     * @brief 求解将光轴对齐到玻璃法线的旋转矩阵
      * 
      * @param glass_normal 玻璃法线，单位向量
-     * @return Matx33d 旋转矩阵，将玻璃法线对齐到z轴
+     * @return Matx33d 旋转矩阵，将相机z轴对齐到玻璃法线
      */
     Matx33d alignAxisToZ(Vec3d glass_normal);
 }}

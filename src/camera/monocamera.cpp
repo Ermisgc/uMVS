@@ -1,8 +1,8 @@
-#include "camera/camera_model.h"
+#include "camera/monocamera.h"
 #include <vector>
 #include <filesystem>
 NAMESPACE_BEGIN { namespace camera {
-    Vec3d CameraModel::pixelToCamDir(const Point2d & uv) const {
+    Vec3d MonoCamera::pixelToCamDir(const Point2d & uv) const {
         std::vector<Point2d> src = {uv};
         std::vector<Point2d> dst;
 
@@ -12,7 +12,7 @@ NAMESPACE_BEGIN { namespace camera {
         return optics::normalize(dir);
     }
 
-    std::vector<Vec3d> CameraModel::pixelToCamDir(const std::vector<Point2d> & uv) const {
+    std::vector<Vec3d> MonoCamera::pixelToCamDir(const std::vector<Point2d> & uv) const {
         std::vector<Point2d> dst;
         cv::undistortPoints(uv, dst, K, D);
         std::vector<Vec3d> dirs;
@@ -22,7 +22,7 @@ NAMESPACE_BEGIN { namespace camera {
         return dirs;
     }
 
-    std::optional<Point2d> CameraModel::camToPixel(const Vec3d& Pc) const{
+    std::optional<Point2d> MonoCamera::camToPixel(const Vec3d& Pc) const{
         double x = Pc[0] / Pc[2];
         double y = Pc[1] / Pc[2];
         double r2 = x * x + y * y;
@@ -47,7 +47,7 @@ NAMESPACE_BEGIN { namespace camera {
      * @brief 把本对象序列化到文件中
      * @param fs 文件存储对象
      */
-    void CameraModel::write(cv::FileStorage& fs) const {
+    void MonoCamera::write(cv::FileStorage& fs) const {
         fs << "imageSize" << imageSize;
         fs << "K" << K;
         fs << "D" << D;
@@ -59,7 +59,7 @@ NAMESPACE_BEGIN { namespace camera {
      * @brief 从文件中读取本对象
      * @param fs 文件存储对象
      */
-    void CameraModel::read(const cv::FileNode& fs) {
+    void MonoCamera::read(const cv::FileNode& fs) {
         fs["imageSize"] >> imageSize;
         fs["K"] >> K;
         fs["D"] >> D;
@@ -68,7 +68,7 @@ NAMESPACE_BEGIN { namespace camera {
         K_inv = K.inv();
     }
 
-    void CameraModel::print() const {
+    void MonoCamera::print() const {
         std::cout << "imageSize: " << imageSize << std::endl;
         std::cout << "K: " << K << std::endl;
         std::cout << "D: " << D << std::endl;
@@ -76,7 +76,7 @@ NAMESPACE_BEGIN { namespace camera {
         std::cout << "t_w2c: " << t_w2c << std::endl;
     }
 
-    double calibratePinhole(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, CameraModel& camera_model, bool verbose){
+    double calibratePinhole(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose){
         //定义世界坐标系下的三维点，这些三维点可以位于世界坐标系的任何一个位置
         //只要棋盘格的参数正确即可，因为这里的标定功能仅限于对相机内参进行标定
         //这里假设所有的棋盘格角点都在世界坐标系的z=0平面上
@@ -168,7 +168,7 @@ NAMESPACE_BEGIN { namespace camera {
         return rms;
     }
 
-    double calibratePinhole(const std::string & imagePath, cv::Size boardSize, double squareSize, CameraModel& camera_model, bool verbose){
+    double calibratePinhole(const std::string & imagePath, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose){
         //从imagePath中读取所有的图片
         std::vector<std::string> imageFiles;
         for(const auto & entry : std::filesystem::directory_iterator(imagePath)){
@@ -182,8 +182,8 @@ NAMESPACE_BEGIN { namespace camera {
         return calibratePinhole(imageFiles, boardSize, squareSize, camera_model, verbose);
     }
 
-    std::ostream& operator<<(std::ostream& os, const CameraModel& camera){
-        os << "CameraModel:" << std::endl;
+    std::ostream& operator<<(std::ostream& os, const MonoCamera& camera){
+        os << "MonoCamera:" << std::endl;
         os << "K:" << std::endl << camera.K << std::endl;
         os << "D:" << std::endl << camera.D << std::endl;
         os << "imageSize:" << camera.imageSize << std::endl;

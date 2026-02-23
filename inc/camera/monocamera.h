@@ -1,5 +1,5 @@
 /**
- * @file camera_model.h
+ * @file monocamera.h
  * @brief 定义了针孔相机模型，以及与该针孔相机所匹配的正反向投影计算方法
  * @author Ermis
  * @date 2025-12-14
@@ -15,7 +15,7 @@ NAMESPACE_BEGIN { namespace camera {
      * 包含：内参、畸变系数、外参
      * 负责像素坐标系、相机坐标系、世界坐标系三者之间的转换
      */
-    class CameraModel{
+    class MonoCamera{
     public:
         Size imageSize;         ///< 图像分辨率
         Matx33d K;              ///< 相机内参矩阵
@@ -27,7 +27,7 @@ NAMESPACE_BEGIN { namespace camera {
         /**
          * @brief 默认构造函数
          */
-        CameraModel():imageSize(0, 0), K(Matx33d::eye()), K_inv(Matx33d::eye()), D(0, 0, 0, 0, 0), 
+        MonoCamera():imageSize(0, 0), K(Matx33d::eye()), K_inv(Matx33d::eye()), D(0, 0, 0, 0, 0), 
                       R_w2c(Matx33d::eye()), t_w2c(0.0, 0.0, 0.0){}
 
         /**
@@ -38,7 +38,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param _R_w2c 外参，相机旋转矩阵，默认值为单位矩阵
          * @param _t_w2c 外参，相机平移向量，默认值为(0, 0, 0)
          */
-        CameraModel(const Matx33d & _K, const Vec5d & _D, const cv::Size & _size,
+        MonoCamera(const Matx33d & _K, const Vec5d & _D, const cv::Size & _size,
                     const Matx33d & _R_w2c = Matx33d::eye(), const Vec3d & _t_w2c = Vec3d(0.0, 0.0, 0.0)):
             imageSize(_size), K(_K), K_inv(_K.inv()), D(_D), R_w2c(_R_w2c), t_w2c(_t_w2c){}
 
@@ -213,7 +213,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param camera 相机模型对象
          * @return std::ostream& 输出流对象
          */
-        friend std::ostream& operator<<(std::ostream& os, const CameraModel& camera);
+        friend std::ostream& operator<<(std::ostream& os, const MonoCamera& camera);
     };
 
     /**
@@ -226,16 +226,16 @@ NAMESPACE_BEGIN { namespace camera {
      * @param verbose 是否打印和显示详细信息，默认值为false
      * @return double 标定误差，单位为mm
      */
-    double calibratePinhole(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, CameraModel& camera_model, bool verbose = false);
+    double calibratePinhole(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose = false);
 
     //这里改为了输入标定图片所处的文件夹，然后对该文件夹下的所有图片进行标定
-    double calibratePinhole(const std::string & imagePath, cv::Size boardSize, double squareSize, CameraModel& camera_model, bool verbose = false);
+    double calibratePinhole(const std::string & imagePath, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose = false);
 
-    static inline void write(cv::FileStorage& fs, const std::string& name, const CameraModel& camera) {
+    static inline void write(cv::FileStorage& fs, const std::string& name, const MonoCamera& camera) {
         camera.write(fs);
     }
 
-    static inline void read(const cv::FileNode& fs, CameraModel & camera,const CameraModel& default_value = CameraModel()) {
+    static inline void read(const cv::FileNode& fs, MonoCamera & camera,const MonoCamera& default_value = MonoCamera()) {
         if(fs.empty()) camera = default_value;
         else camera.read(fs);
     }

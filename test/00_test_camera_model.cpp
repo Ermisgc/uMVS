@@ -17,7 +17,7 @@
 #include <cmath>
 
 // 包含你的头文件
-#include "camera/camera_model.h"
+#include "camera/monocamera.h"
 #include "optics/geometry.h"
 
 using namespace NAMESPACE_U3D;
@@ -41,7 +41,7 @@ int main(){
     Matx33d R = Matx33d::eye(); 
     Vec3d t(0, 0, 0); 
 
-    CameraModel cam(K, D, imgSize, R, t);
+    MonoCamera cam(K, D, imgSize, R, t);
 
     if (!cam.isValid()) {
         std::cerr << "[Error] CameraModel is not valid!" << std::endl;
@@ -88,7 +88,7 @@ int main(){
         fs.release();
     }
 
-    CameraModel cam_loaded;
+    MonoCamera cam_loaded;
     {
         cv::FileStorage fs(filename, cv::FileStorage::READ);
         cam_loaded.read(fs.root()); // 读取根节点

@@ -5,7 +5,7 @@
  * @brief 标定测试，读取本地标定板图片，然后执行相机标定
  * @example 使用示例为
  * @code
- * ./bin/Release/01_test_calibration --imgDir ./CbtCameraL --boardSize 11,8 --squareSize 15.0 --save=calibrated_params.yaml --verbose
+ * ./bin/Release/01_test_calibration --imgDir ./CbtCameraL --boardSize 11,8 --squareSize 15.0 --save calibrated_params.yaml --verbose
  * @endcode
  */
 
@@ -13,12 +13,12 @@
 #include <vector>
 #include <string>
 #include <opencv2/opencv.hpp>
-#include "camera/camera_model.h" 
+#include "camera/monocamera.h" 
 #include "argparse/argparse.hpp"
 
 
 int main(int argc, char** argv) {
-    argparse::ArgumentParser parser("01_test_calibration");
+    argparse::ArgumentParser parser("calibrateMono");
     parser.add_argument("--imgDir", "-i").required().help("Path to the directory containing calibration images");
     parser.add_argument("--boardSize", "-b").required().help("Size of the checkerboard (rows,cols)");
     parser.add_argument("--squareSize", "-s").required().help("Size of each square in the checkerboard");
@@ -31,11 +31,11 @@ int main(int argc, char** argv) {
         std::cerr << parser;
         return 1;
     }
-    std::string imgDir = parser.get<std::string>("imgDir"); 
-    std::string boardSizeString = parser.get<std::string>("boardSize");
-    std::string squareSizeString = parser.get<std::string>("squareSize"); 
-    std::string savePath = parser.get<std::string>("save");
-    bool verbose = parser.get<bool>("verbose");
+    std::string imgDir = parser.get<std::string>("--imgDir"); 
+    std::string boardSizeString = parser.get<std::string>("--boardSize");
+    std::string squareSizeString = parser.get<std::string>("--squareSize"); 
+    std::string savePath = parser.get<std::string>("--save");
+    bool verbose = parser.get<bool>("--verbose");
 
     cv::Size boardSize;
     auto pos = boardSizeString.find(',');
@@ -43,7 +43,13 @@ int main(int argc, char** argv) {
     boardSize.height = std::stoi(boardSizeString.substr(pos + 1));
     double squareSize = std::stod(squareSizeString);
 
-    u3d::camera::CameraModel myCam;
+    std::cout << "[Info] imgDir: " << imgDir << std::endl;
+    std::cout << "[Info] boardSize: " << boardSizeString << std::endl;
+    std::cout << "[Info] squareSize: " << squareSizeString << std::endl;
+    std::cout << "[Info] savePath: " << savePath << std::endl;
+    std::cout << "[Info] verbose: " << verbose << std::endl;
+
+    u3d::camera::MonoCamera myCam;
     
     double rms = u3d::camera::calibratePinhole(imgDir, boardSize, squareSize, myCam, verbose);
     if (rms < 0) {
@@ -59,8 +65,12 @@ int main(int argc, char** argv) {
     else if (rms < 1.0) std::cout << "[Info] Acceptable calibration (RMS < 1.0)" << std::endl;
     else std::cout << "[Info] Poor calibration (RMS >= 1.0), suggest to re-take images or check corner parameters." << std::endl;
 
-    cv::FileStorage fs("calibrated_params.yaml", cv::FileStorage::WRITE);
+    cv::FileStorage fs(savePath, cv::FileStorage::WRITE);
+    if(!fs.isOpened()){
+        std::cerr << "[Fail] Failed to open file " << savePath << std::endl;
+        return -1;
+    }
     myCam.write(fs);
-    std::cout << "[Info] Parameters have been saved to calibrated_params.yaml" << std::endl;
+    std::cout << "[Info] Parameters have been saved to " << savePath << std::endl;
     return 0;
 }

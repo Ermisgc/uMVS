@@ -1,19 +1,19 @@
 #include "camera/binocamera.h"
 NAMESPACE_BEGIN{namespace camera{
-    BinocularCamera::BinocularCamera(const CameraModel& left_camera, const CameraModel& right_camera)
+    BinoCamera::BinoCamera(const MonoCamera& left_camera, const MonoCamera& right_camera)
     : left_camera(left_camera), right_camera(right_camera){
         initRemap(left_camera, right_camera);
     }
 
-    std::pair<cv::Mat, cv::Mat> BinocularCamera::rectify(const cv::Mat& left_img, const cv::Mat& right_img){
+    std::pair<cv::Mat, cv::Mat> BinoCamera::rectify(const cv::Mat& left_img, const cv::Mat& right_img){
         if(!is_init){
-            throw std::runtime_error("BinocularCamera::rectify: not init");
+            throw std::runtime_error("BinoCamera::rectify: not init");
         }
         if(left_img.empty() || right_img.empty()){
-            throw std::invalid_argument("BinocularCamera::rectify: image is empty");
+            throw std::invalid_argument("BinoCamera::rectify: image is empty");
         }
         if(left_img.size() != imgSize || right_img.size() != imgSize){
-            throw std::invalid_argument("BinocularCamera::rectify: image size not match");
+            throw std::invalid_argument("BinoCamera::rectify: image size not match");
         }
 
         cv::Mat rectified_left_img, rectified_right_img;
@@ -23,7 +23,7 @@ NAMESPACE_BEGIN{namespace camera{
         return std::make_pair(rectified_left_img, rectified_right_img);
     }
 
-    void BinocularCamera::write(cv::FileStorage& fs) const {
+    void BinoCamera::write(cv::FileStorage& fs) const {
         fs << "left_camera" << "{";
         left_camera.write(fs);
         fs << "}";
@@ -32,20 +32,20 @@ NAMESPACE_BEGIN{namespace camera{
         fs << "}";
     }
 
-    void BinocularCamera::read(const cv::FileNode& fs) {
+    void BinoCamera::read(const cv::FileNode& fs) {
         fs["left_camera"] >> left_camera;
         fs["right_camera"] >> right_camera;
         initRemap(left_camera, right_camera);
     }
 
-    std::ostream& operator<<(std::ostream& os, const BinocularCamera& camera){
-        os << "BinocularCamera:" << std::endl;
+    std::ostream& operator<<(std::ostream& os, const BinoCamera& camera){
+        os << "BinoCamera:" << std::endl;
         os << "left_camera:" << std::endl << camera.left_camera << std::endl;
         os << "right_camera:" << std::endl << camera.right_camera << std::endl;
         return os;
     }
 
-    void BinocularCamera::initRemap(const CameraModel& left_camera, const CameraModel& right_camera){
+    void BinoCamera::initRemap(const MonoCamera& left_camera, const MonoCamera& right_camera){
         this->imgSize = left_camera.imageSize;
         //根据已经标定好的双目相机模型，求校正时remap，采用Bongeut方法
         Matx33d K_l = left_camera.K, K_r = right_camera.K;

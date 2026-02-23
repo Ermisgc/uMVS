@@ -1,8 +1,11 @@
-#include "camera/monocular_uwcamera.h"
+#include "camera/monouwcamera.h"
 #include "optics/quartic_solver.h"
+#include "optics/geometry.h"
+#include <Eigen/Core>
+#include <Eigen/Eigen>
 
 NAMESPACE_BEGIN { namespace camera {
-    MonocularUWCamera::MonocularUWCamera(const CameraModel& camera_model,const optics::RefractiveInterface& p1, const optics::RefractiveInterface& p2){
+    MonoUWCamera::MonoUWCamera(const MonoCamera& camera_model,const optics::RefractiveInterface& p1, const optics::RefractiveInterface& p2){
         auto p1_copy = p1;
         auto p2_copy = p2;
 
@@ -29,7 +32,7 @@ NAMESPACE_BEGIN { namespace camera {
         glass_normal_ = refraction_planes_[1].plane.normal;
     }
 
-    MonocularUWCamera::MonocularUWCamera(const CameraModel& camera_model, double d1, double d2, double n0, double n1, double n2, const Vec3d& glass_normal):
+    MonoUWCamera::MonoUWCamera(const MonoCamera& camera_model, double d1, double d2, double n0, double n1, double n2, const Vec3d& glass_normal):
         camera_model_(camera_model), n_air_(n0), n_glass_(n1), n_water_(n2), d_housing_(d1), d_glass_(d2), glass_normal_(glass_normal) 
     {
         camera_model_ = camera_model;
@@ -46,7 +49,7 @@ NAMESPACE_BEGIN { namespace camera {
         refraction_planes_ = {std::move(p1), std::move(p2)};
     }
 
-    std::optional<Point2d> MonocularUWCamera::forwardProject(const Vec3d& pw, ForwardMethod method) const{
+    std::optional<Point2d> MonoUWCamera::forwardProject(const Vec3d& pw, ForwardMethod method) const{
         //首先将点从世界坐标系变换到相机坐标系
         Vec3d pc = camera_model_.worldToCam(pw);
 
@@ -64,13 +67,15 @@ NAMESPACE_BEGIN { namespace camera {
                 return this->solveAnalytic2(pc);
             case ForwardMethod::ITERATE_HELLAY:
                 return this->solveIterateHellay(pc);
+            case ForwardMethod::ANALYTIC_ACCURATE:
+                return this->solveAnalyticAccurate(pc);
             default:
                 return this->solveIterative(pc);
         }
         return std::nullopt;
     }
 
-    std::optional<Vec3d> MonocularUWCamera::backwardProject(const Vec2d& uv, double depth) const{
+    std::optional<Vec3d> MonoUWCamera::backwardProject(const Vec2d& uv, double depth) const{
         //求像素点通过两个平面折射后发出的射线
         auto ret = this->backwardProject(uv);
         if(!ret.has_value()){
@@ -92,7 +97,7 @@ NAMESPACE_BEGIN { namespace camera {
         return P;
     }
 
-    void MonocularUWCamera::write(cv::FileStorage& fs) const {
+    void MonoUWCamera::write(cv::FileStorage& fs) const {
         fs << "camera_model" << "{";
         camera_model_.write(fs);
         fs << "}";
@@ -105,7 +110,7 @@ NAMESPACE_BEGIN { namespace camera {
         fs << "glass_normal" << glass_normal_;
     }
 
-    void MonocularUWCamera::write(const std::string& filename) const {
+    void MonoUWCamera::write(const std::string& filename) const {
         cv::FileStorage fs(filename, cv::FileStorage::WRITE);
         if (!fs.isOpened()) {
             throw std::runtime_error("Failed to open camera calibration file");
@@ -113,7 +118,7 @@ NAMESPACE_BEGIN { namespace camera {
         write(fs);
     }
 
-    void MonocularUWCamera::read(const cv::FileNode& fs) {
+    void MonoUWCamera::read(const cv::FileNode& fs) {
         fs["camera_model"] >> camera_model_;
         fs["n_air"] >> n_air_;
         fs["n_glass"] >> n_glass_;
@@ -129,7 +134,7 @@ NAMESPACE_BEGIN { namespace camera {
         refraction_planes_ = {std::move(p1), std::move(p2)};
     }
 
-    void MonocularUWCamera::read(const std::string& filename) {
+    void MonoUWCamera::read(const std::string& filename) {
         cv::FileStorage fs(filename, cv::FileStorage::READ);
         if (!fs.isOpened()) {
             throw std::runtime_error("Failed to open camera calibration file");
@@ -137,7 +142,7 @@ NAMESPACE_BEGIN { namespace camera {
         read(fs.root());
     }
 
-    std::optional<Point2d> MonocularUWCamera::solveIterative(const Vec3d& pc) const{
+    std::optional<Point2d> MonoUWCamera::solveIterative(const Vec3d& pc) const{
         //策略：
         //1. 初值：使用简单的针孔投影，得到一个初始值uv_0
         //2. 循环：
@@ -231,7 +236,7 @@ NAMESPACE_BEGIN { namespace camera {
         return R_align.t();
     }
 
-    std::optional<Point2d> MonocularUWCamera::solveAnalytic(const Vec3d& pc) const{
+    std::optional<Point2d> MonoUWCamera::solveAnalytic(const Vec3d& pc) const{
         // 将双层折射等效为单层折射，然后调用四次方程求解器求解
         // 共分为四步：
         // 1. 先将点pc转换到玻璃垂直坐标系
@@ -264,7 +269,7 @@ NAMESPACE_BEGIN { namespace camera {
         double no_fractive_Rc = Rc * dx / pc_virtual[2];  //用于筛选最后的生成根
         if(Rc < 1e-6){  //特殊情况，如果半径是0，可以直接知道位置了，这里给定一个与dx相关的比例系数，避免在中心时除以Rc会得到极端值
             Vec3d ps = R_align.t() * Vec3d(0, 0, dx);
-            return camera_model_.forwardProject(ps);
+            return camera_model_.camToPixel(ps);
         }
 
         // 计算四次方程的系数
@@ -275,7 +280,7 @@ NAMESPACE_BEGIN { namespace camera {
         std::vector<double> roots = QuarticSolver::solve(A, B, C, D, E);
         double r_best = INT_MAX;
         for(double r : roots){
-            if(r > 1e-6 && r > no_fractive_Rc && r < no_fractive_Rc * 1.5 && r < r_best){
+            if(r > 1e-6 && r > no_fractive_Rc && r < no_fractive_Rc * 2 && r < r_best){
                 r_best = r;
             }
         }
@@ -284,10 +289,10 @@ NAMESPACE_BEGIN { namespace camera {
         double scale = r_best / Rc;
         Vec3d ps(pc_virtual[0] * scale, pc_virtual[1] * scale, dx);
         ps = R_align.t() * ps;  // 转换回相机坐标系
-        return camera_model_.forwardProject(ps);
+        return camera_model_.camToPixel(ps);
     }
 
-    std::optional<Point2d> MonocularUWCamera::solveIterateHellay(const Vec3d& pc) const {
+    std::optional<Point2d> MonoUWCamera::solveIterateHellay(const Vec3d& pc) const {
         //坐标系对齐：转换到玻璃垂直坐标系 (与解析法一致)
         Matx33d R_align = alignAxisToZ(glass_normal_);
         Vec3d pc_v = R_align * pc; 
@@ -297,7 +302,7 @@ NAMESPACE_BEGIN { namespace camera {
 
         // 特殊情况处理：点在光轴上
         if (Rw < 1e-6) {
-            return camera_model_.forwardProject(R_align.t() * Vec3d(0, 0, d_housing_));
+            return camera_model_.camToPixel(R_align.t() * Vec3d(0, 0, d_housing_));
         }
 
         double r = (Rw * d_housing_) / Zw; // 这是一个极简初值，建议使用解析法算出的 r_best
@@ -353,10 +358,10 @@ NAMESPACE_BEGIN { namespace camera {
         Vec3d ps_v(pc_v[0] * scale, pc_v[1] * scale, da);
         Vec3d ps_c = R_align.t() * ps_v;
 
-        return camera_model_.forwardProject(ps_c);
+        return camera_model_.camToPixel(ps_c);
     }
 
-    std::optional<Point2d> MonocularUWCamera::solveAnalytic2(const Vec3d& pc) const{
+    std::optional<Point2d> MonoUWCamera::solveAnalytic2(const Vec3d& pc) const{
         Matx33d R_align = alignAxisToZ(glass_normal_);
         Vec3d pc_virtual = R_align * pc;  // 将点pc转换到玻璃坐标系
 
@@ -372,7 +377,7 @@ NAMESPACE_BEGIN { namespace camera {
         double no_fractive_Rc = Rc * dx / pc_virtual[2];  //用于筛选最后的生成根
         if(Rc < 1e-6){  //特殊情况，如果半径是0，可以直接知道位置了，这里给定一个与dx相关的比例系数，避免在中心时除以Rc会得到极端值
             Vec3d ps = R_align.t() * Vec3d(0, 0, dx);
-            return camera_model_.forwardProject(ps);
+            return camera_model_.camToPixel(ps);
         }
 
         // 计算四次方程的系数
@@ -398,17 +403,159 @@ NAMESPACE_BEGIN { namespace camera {
         double scale = r_best / Rc;
         Vec3d ps(pc_virtual[0] * scale, pc_virtual[1] * scale, dx);
         ps = R_align.t() * ps;  // 转换回相机坐标系
-        return camera_model_.forwardProject(ps);
+        return camera_model_.camToPixel(ps);
     }
 
-    std::optional<Point2d> MonocularUWCamera::solveGeometric(const Vec3d& pc) const {
+    /**
+     * @brief 编译单元内部函数，求解12次多项式
+     * @param coeffs 
+     * @return std::vector<std::complex<double>> 
+     */
+    static std::vector<std::complex<double>> solvePolynomialTwelve(const Eigen::VectorXd& coeffs){
+        int n = coeffs.size() - 1;
+        int start = 0;
+        while (start < n && abs(coeffs(start)) < 1e-15) start++;
+
+        if (start >= n) return std::vector<std::complex<double>>();  // 所有系数都是0
+
+        int degree = n - start;  // 多项式的次数
+        if (degree == 0) return std::vector<std::complex<double>>();  // 伴随矩阵的秩为0
+
+        Eigen::MatrixXd companion = Eigen::MatrixXd::Zero(degree, degree);
+        double leadCoeff = coeffs(start);
+
+        for (int i = 0; i < degree; i++) {
+            companion(0, i) = -coeffs(start + i + 1) / leadCoeff;
+        }
+
+        for (int i = 1; i < degree; i++) {
+            companion(i, i - 1) = 1.0;
+        }
+
+        Eigen::EigenSolver<Eigen::MatrixXd> solver(companion);
+        auto eigenvalues = solver.eigenvalues();
+
+        std::vector<std::complex<double>> roots;
+        for (int i = 0; i < eigenvalues.size(); i++) {
+            roots.push_back(eigenvalues(i));
+        }
+
+        return roots;
+    }
+
+    std::optional<Point2d> MonoUWCamera::solveAnalyticAccurate(const Vec3d& pc) const{
+        assert(n_air_ > 1e-6, "invalid n_air_");
+        double d = d_housing_ + d_glass_;
+        double d2 = d_housing_;
+        Eigen::Vector3d z1 = {glass_normal_[0], glass_normal_[1], glass_normal_[2]};  //玻璃法向方向，也是POR中的z1方向
+        if(z1[2] < 0) z1 = -z1;
+        z1.normalize();
+
+        Eigen::Vector3d p(pc(0), pc(1), pc(2));
+        Eigen::Vector3d POR = z1.cross(p);
+        Eigen::Vector3d z2 = POR.cross(z1);
+        z2.normalize();
+        
+        if(POR.norm() < 1e-10) {
+            //此时直接取法玻璃法矢与玻璃的成像夹角在成像平面的投影
+            double scale = d_housing_ / z1(2);
+            return camera_model_.camToPixel({z1(0) * scale, z1(1) * scale, z1(2) * scale});
+        }
+
+        Eigen::Vector2d mu = Eigen::Vector2d(n_water_ / n_air_, n_glass_ / n_air_);
+
+        // 将3D点投影到POR上
+        double v = p.dot(z1);
+        double u = std::abs(p.dot(z2));
+
+        // 计算多项式系数
+        double mu1_2 = mu(0) * mu(0);
+        double mu2_2 = mu(1) * mu(1);
+        double d_2 = d * d;
+        double d_4 = d_2 * d_2;
+        double d_8 = d_4 * d_4;
+        double u_2 = u * u;
+        double u_3 = u_2 * u;
+        double u_4 = u_2 * u_2;
+
+        double term1 = mu1_2 - 1.0;
+        double term2 = mu2_2 - 1.0;
+        double term1_2 = term1 * term1;
+        double term2_2 = term2 * term2;
+
+        double dd = d - d2;
+        double dd_2 = dd * dd;
+        double dv = d2 - v;
+        double dv_2 = dv * dv;
+
+        // 计算中间项 A, B, C
+        double A = term2 * (u_2 * term1 + d_2 * mu1_2) -
+                term2 * dd_2 -
+                term1 * dv_2 +
+                d_2 * mu2_2 * term1;
+
+        double B = d_2 * mu2_2 * (u_2 * term1 + d_2 * mu1_2) -
+                d_2 * mu2_2 * dd_2 -
+                d_2 * mu1_2 * dv_2 +
+                d_2 * mu1_2 * u_2 * term2;
+
+        double C = 2.0 * d_2 * mu1_2 * u * term2 +
+                2.0 * d_2 * mu2_2 * u * term1;
+
+        Eigen::VectorXd coeffs(13);
+
+        coeffs(0) = term1_2 * term2_2;
+        coeffs(1) = -4.0 * u * term1_2 * term2_2;
+        coeffs(2) = 4.0 * u_2 * term1_2 * term2_2 + 2.0 * term1 * term2 * A;
+        coeffs(3) = -2.0 * term1 * term2 * C - 4.0 * u * term1 * term2 * A;
+        coeffs(4) = A * A + 2.0 * term1 * term2 * B - 4.0 * term1 * term2 * dd_2 * dv_2 + 4.0 * u * term1 * term2 * C;
+        coeffs(5) = -2.0 * C * A - 4.0 * u * term1 * term2 * B - 4.0 * d_4 * mu1_2 * mu2_2 * u * term1 * term2;
+        coeffs(6) = 2.0 * A * B + C * C - 4.0 * dd_2 * (d_2 * mu1_2 * term2 + d_2 * mu2_2 * term1) * dv_2 + 10.0 * d_4 * mu1_2 * mu2_2 * u_2 * term1 * term2;
+        coeffs(7) = -2.0 * C * B - 4.0 * d_4 * mu1_2 * mu2_2 * u * A - 4.0 * d_4 * mu1_2 * mu2_2 * u_3 * term1 * term2;
+        coeffs(8) = B * B + 2.0 * d_4 * mu1_2 * mu2_2 * u_2 * A - 4.0 * d_4 * mu1_2 * mu2_2 * dd_2 * dv_2 + 4.0 * d_4 * mu1_2 * mu2_2 * u * C;
+        coeffs(9) = -2.0 * d_4 * mu1_2 * mu2_2 * u_2 * C - 4.0 * d_4 * mu1_2 * mu2_2 * u * B;
+        coeffs(10) = 4.0 * d_8 * mu1_2 * mu1_2 * mu2_2 * mu2_2 * u_2 + 2.0 * d_4 * mu1_2 * mu2_2 * u_2 * B;
+        coeffs(11) = -4.0 * d_8 * mu1_2 * mu1_2 * mu2_2 * mu2_2 * u_3;
+        coeffs(12) = d_8 * mu1_2 * mu1_2 * mu2_2 * mu2_2 * u_4;
+
+        auto roots = solvePolynomialTwelve(coeffs); 
+
+        double best_dist = std::numeric_limits<double>::max();  //设定的初始距离，如果解太离谱，也视作没找到
+        Point2d best_pixel;
+        bool found = false;
+
+        for (const auto& root : roots) {
+            if (std::abs(root.imag()) >= 1e-7) continue;
+            double r = root.real(); 
+            Eigen::Vector3d q_air = d2 * z1 + r * z2;
+            Eigen::Vector3d v_air = q_air.normalized();
+            optics::Ray ray_air(Vec3d(0, 0, 0), Vec3d(v_air(0), v_air(1), v_air(2)));
+            auto ray = optics::traceThroughInterfaces(ray_air, this->refraction_planes_);  //水中的折射射线
+            //然后比较点到折射射线的距离：
+            if(!ray.has_value()) continue;
+            optics::Ray ray_water = ray.value();
+            double dist = optics::distPointToLine(pc, ray_water);
+            if(dist < best_dist){
+                auto pixel = camera_model_.camToPixel({q_air(0), q_air(1), q_air(2)});
+                if(!pixel.has_value()) continue;
+                best_pixel = pixel.value();
+                best_dist = dist;
+                found = true;
+            }
+        }
+
+        if (found) return best_pixel;
+        return std::nullopt;
+    }
+
+    std::optional<Point2d> MonoUWCamera::solveGeometric(const Vec3d& pc) const {
         //TODO:几何算法，目前不存在
 
         return std::nullopt;
     }
 
     double calibrate(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, 
-        const CameraModel& camera_model, MonocularUWCamera& uw_camera, bool verbose)
+        const MonoCamera& camera_model, MonoUWCamera& uw_camera, bool verbose)
     {
         //这里采用Agrawal的方法
         //Step1. 求解玻璃的法矢A
@@ -417,89 +564,8 @@ NAMESPACE_BEGIN { namespace camera {
         return .0;
     }
 
-    /**
-     * @brief 生成水下相机的立体校正映射表
-     * 
-     * @param real_cam 真实的物理水下相机模型 (Source)
-     * @param virtual_cam 理想的虚拟针孔相机模型 (Target, 也就是校正后的样子)
-     * @param R_rect 校正旋转矩阵 (R_l 或 R_r，来自 stereoRectify)
-     * @param P_rect 校正投影矩阵 (P_l 或 P_r，来自 stereoRectify)
-     * @param size 图像尺寸
-     * @param z_ref 参考深度 (mm)，建议设为拍摄主体的平均距离
-     * @param map1 输出 map_x
-     * @param map2 输出 map_y
-     */
-    void initUWRectifyMap(const NAMESPACE_U3D::camera::MonocularUWCamera& real_cam,
-                        const cv::Size& size,
-                        const cv::Mat& R_rect,
-                        const cv::Mat& P_rect,
-                        double z_ref,
-                        cv::Mat& map1,
-                        cv::Mat& map2) 
-    {
-        // 初始化映射表
-        map1 = cv::Mat(size, CV_32FC1);
-        map2 = cv::Mat(size, CV_32FC1);
-
-        // 预先计算 P_rect 的逆或者相关参数，用于从像素恢复归一化坐标
-        // P_rect = [f_x, 0, c_x, t_x; 0, f_y, c_y, 0; 0, 0, 1, 0]
-        double fx = P_rect.at<double>(0, 0);
-        double fy = P_rect.at<double>(1, 1);
-        double cx = P_rect.at<double>(0, 2);
-        double cy = P_rect.at<double>(1, 2);
-        // 注意：stereoRectify 出来的 P 矩阵通常包含平移 t，但在生成 map 时，
-        // 我们主要关注旋转后的方向。如果是左图，t通常为0；右图有 t。
-        // 更通用的做法是：Pixel -> Norm -> Rotate(R_rect.inv()) -> World
-        
-        cv::Mat R_inv;
-        cv::invert(R_rect, R_inv);
-
-        //左图的映射表
-        for (int v = 0; v < size.height; ++v) {
-            for (int u = 0; u < size.width; ++u) {
-                // 1. 【逆向过程】从校正后的虚拟图像出发
-                // 将像素 (u, v) 转换为归一化平面坐标
-                double x_norm = (u - cx) / fx;
-                double y_norm = (v - cy) / fy;
-                
-                // 2. 恢复到相机坐标系下的射线方向 (假设 Z=1)
-                // 此时的点 P_rect_cam = [x_norm, y_norm, 1]^T 是在"校正后"坐标系下的
-                cv::Mat P_rect_cam = (cv::Mat_<double>(3, 1) << x_norm, y_norm, 1.0);
-                
-                // 3. 旋转回"原始"相机坐标系 (但仍是虚拟针孔的姿态，未考虑折射)
-                // P_virt = R_rect^T * P_rect_cam
-                cv::Mat P_virt_mat = R_inv * P_rect_cam;
-                NAMESPACE_U3D::Vec3d P_virt(P_virt_mat.at<double>(0), 
-                                            P_virt_mat.at<double>(1), 
-                                            P_virt_mat.at<double>(2));
-                
-                // 4. 【关键】确定 3D 参考点
-                // 我们需要把这个方向延展到参考深度 z_ref
-                // 比例 scale = z_ref / P_virt.z
-                double scale = z_ref / P_virt[2];
-                NAMESPACE_U3D::Vec3d P_world = P_virt * scale;
-
-                // 5. 【正向过程】利用物理水下模型投影回原始图像
-                // 这一步会精确计算折射，找到这个 3D 点在原始畸变图像上的位置
-                // 使用 ITERATE 方法保证最高精度
-                auto pixel_raw_opt = real_cam.forwardProject(P_world, NAMESPACE_U3D::camera::ForwardMethod::ITERATE);
-
-                if (pixel_raw_opt.has_value()) {
-                    map1.at<float>(v, u) = static_cast<float>(pixel_raw_opt.value().x);
-                    map2.at<float>(v, u) = static_cast<float>(pixel_raw_opt.value().y);
-                } else {
-                    // 如果投影失败（超视场），填入非法值或边缘值
-                    map1.at<float>(v, u) = -1;
-                    map2.at<float>(v, u) = -1;
-                }
-            }
-        }
-
-
-    }
-
-    std::ostream& operator<<(std::ostream& os, const MonocularUWCamera& camera){
-        os << "MonocularUWCamera:" << std::endl;
+    std::ostream& operator<<(std::ostream& os, const MonoUWCamera& camera){
+        os << "MonoUWCamera:" << std::endl;
         os << "camera_model:" << std::endl << camera.camera_model_ << std::endl;
         os << "n_air_:" << camera.n_air_ << std::endl;
         os << "n_glass_:" << camera.n_glass_ << std::endl;

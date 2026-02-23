@@ -107,7 +107,7 @@ NAMESPACE_BEGIN { namespace camera{
         return {left_rectified, right_rectified};
     }
 
-    void BinoUWCamera::initRemap(const MonocularUWCamera& left_camera, const MonocularUWCamera& right_camera){
+    void BinoUWCamera::initRemap(const MonoUWCamera& left_camera, const MonoUWCamera& right_camera){
         using namespace NAMESPACE_U3D::optics;
         auto left_pinhole = left_camera.pinhole();
         auto right_pinhole = right_camera.pinhole();

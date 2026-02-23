@@ -9,7 +9,7 @@
 #include <iostream>
 #include <vector>
 #include <opencv2/opencv.hpp>
-#include "camera/monocular_uwcamera.h"
+#include "camera/monouwcamera.h"
 
 // 使用你的命名空间
 using namespace NAMESPACE_U3D::camera;
@@ -52,7 +52,7 @@ int main() {
     cv::Mat R = cv::Mat::eye(3, 3, CV_64F);
     cv::Vec3d t(0, 0, 0);
 
-    CameraModel pinhole(K, D, {width, height}, R, t);
+    MonoCamera pinhole(K, D, {width, height}, R, t);
     std::cout << "Camera Model initialized." << std::endl;
 
     // ---------------------------------------------------------
@@ -66,7 +66,7 @@ int main() {
     double n_water = 1.333;     // 水
     cv::Vec3d normal(0, 0, 1);  // 玻璃法线朝前
 
-    MonocularUWCamera uw_cam(pinhole, d_housing, d_glass, n_air, n_glass, n_water, normal);
+    MonoUWCamera uw_cam(pinhole, d_housing, d_glass, n_air, n_glass, n_water, normal);
     std::cout << "Underwater Camera initialized." << std::endl;
     std::cout << "---------------------------------------------" << std::endl;
 

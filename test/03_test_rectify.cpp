@@ -43,7 +43,7 @@ int main(int argc, char *argv[]){
     std::cout << ">>> show: " << show << std::endl;
 
     // 加载双目相机模型
-    NAMESPACE_U3D::camera::BinocularCamera camera;
+    NAMESPACE_U3D::camera::BinoCamera camera;
     cv::FileStorage fs(modelPath, cv::FileStorage::READ);
     if(!fs.isOpened()){
         std::cerr << "Error: Failed to open model file." << std::endl;
