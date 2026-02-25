@@ -1,9 +1,9 @@
 /**
- * @file 07_test_stereo_rectify.cpp
- * @brief 水下双目相机的题例校正误差
+ * @file rectifyUW.cpp
+ * @brief 水下双目相机的立体校正
  * @version 0.1
  * @date 2026-02-15
- * @example 07_test_stereo_rectify.exe -c binouwcam_1110.yaml
+ * @example rectifyUW -c binouwcam_1110.yaml -l left.png -r right.png -lo left_output.png -ro right_output.png -co combine_output.png
  * @copyright Copyright (c) 2026
  * 
  */
@@ -24,7 +24,7 @@ using namespace NAMESPACE_U3D::camera;
 
 int main(int argc, char** argv) {
     
-    argparse::ArgumentParser program("07_test_stereo_rectify");
+    argparse::ArgumentParser program("rectifyUW");
     program.add_argument("--model", "-m").required().help("Path to the binocular camera model file");
     program.add_argument("--left", "-l").required().help("Path to the left image file");
     program.add_argument("--right", "-r").required().help("Path to the right image file");

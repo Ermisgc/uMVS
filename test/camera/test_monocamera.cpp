@@ -1,5 +1,5 @@
 /**
- * @file 00_test_camera_model.cpp
+ * @file test_monocamera.cpp
  * @author ermis
  * @brief 单元测试，验证针孔相机模型的投影、反投影及序列化功能
  * @details 本文件的测试场景如下：

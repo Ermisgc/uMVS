@@ -1,5 +1,5 @@
 /**
- * @file 02_test_uwcamera.cpp
+ * @file test_monouwcamera.cpp
  * @brief 水下相机模型单元测试：验证正反向投影的闭环一致性
  * 在测试中，验证了不考虑折射时的误差和考虑折射时的误差，两者相差很大
  * 

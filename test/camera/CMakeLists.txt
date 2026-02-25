@@ -1,0 +1,4 @@
+add_executable(test_monocamera test_monocamera.cpp)
+target_link_libraries(test_monocamera ${PROJECT_NAME} ${ALL_LIBS})
+add_executable(test_monouwcamera test_monouwcamera.cpp)
+target_link_libraries(test_monouwcamera ${PROJECT_NAME} ${ALL_LIBS})

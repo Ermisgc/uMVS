@@ -1,9 +1,9 @@
 /**
- * @file 08_vertical_error_of_rectify.cpp
+ * @file test_vertical_error_of_rectify.cpp
  * @brief 水下双目相机的垂直方向校正误差
  * @version 0.1
  * @date 2026-02-15
- * @example ./bin/Release/08_vertical_error_of_rectify.exe -m binouwcam_1110.yaml -l ./DataStereo/20251110/L -r ./DataStereo/20251110/R
+ * @example ./bin/Release/test_vertical_error_of_rectify.exe -m binouwcam_1110.yaml -l ./DataStereo/20251110/L -r ./DataStereo/20251110/R
  * @copyright Copyright (c) 2026
  * 
  */

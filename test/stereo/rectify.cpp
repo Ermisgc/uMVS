@@ -1,16 +1,16 @@
 /**
- * @file 03_test_rectify.cpp
+ * @file rectify.cpp
  * @brief 空气中双目相机模型的立体校正：输入相机模型和左右目图像，输出校正后的左右目图像
  * 本模型不涉及到折射，因此不考虑折射时的误差
  * @example
- * ./bin/Release/03_test_rectify --model ./binocam_0310.yml --left ./left.png --right ./right.png 
+ * ./bin/Release/rectify --model ./binocam_0310.yml --left ./left.png --right ./right.png 
  * --left_out ./left_output.png --right_out ./right_output.png --combine_out ./combine_output.png
  */
 
 #include "camera/binocamera.h"
 #include "argparse/argparse.hpp"
 int main(int argc, char *argv[]){
-    argparse::ArgumentParser program("03_test_rectify");
+    argparse::ArgumentParser program("rectify");
     program.add_argument("--model", "-m").required().help("Path to the binocular camera model file");
     program.add_argument("--left", "-l").required().help("Path to the left image file");
     program.add_argument("--right", "-r").required().help("Path to the right image file");
@@ -54,8 +54,8 @@ int main(int argc, char *argv[]){
     std::cout << "Info: BinocularCamera model loaded successfully:" << std::endl << camera << std::endl;
 
     // 加载左右图像并进行立体校正
-    cv::Mat leftImg = cv::imread(leftPath, cv::IMREAD_GRAYSCALE);
-    cv::Mat rightImg = cv::imread(rightPath, cv::IMREAD_GRAYSCALE);
+    cv::Mat leftImg = cv::imread(leftPath, cv::IMREAD_COLOR);
+    cv::Mat rightImg = cv::imread(rightPath, cv::IMREAD_COLOR);
     if(leftImg.empty() || rightImg.empty()){
         std::cerr << "Error: Failed to load images." << std::endl;
         return 1;
@@ -69,14 +69,22 @@ int main(int argc, char *argv[]){
     
      //转为彩色图：
     cv::Mat rectifiedLeftImgColor;
-    cv::cvtColor(rectifiedLeftImg, rectifiedLeftImgColor, cv::COLOR_GRAY2BGR);
+    if(rectifiedLeftImg.type() == CV_8UC1){
+        cv::cvtColor(rectifiedLeftImg, rectifiedLeftImgColor, cv::COLOR_GRAY2BGR);
+    } else if(rectifiedLeftImg.type() == CV_8UC3){
+        rectifiedLeftImg.copyTo(rectifiedLeftImgColor);
+    }
     if(!leftOutPath.empty()){
         cv::imwrite(leftOutPath, rectifiedLeftImgColor);
         std::cout << "Rectified left image saved to " << leftOutPath << std::endl;
     }
 
     cv::Mat rectifiedRightImgColor;
-    cv::cvtColor(rectifiedRightImg, rectifiedRightImgColor, cv::COLOR_GRAY2BGR);
+    if(rectifiedRightImg.type() == CV_8UC1){
+        cv::cvtColor(rectifiedRightImg, rectifiedRightImgColor, cv::COLOR_GRAY2BGR);
+    } else if(rectifiedRightImg.type() == CV_8UC3){
+        rectifiedRightImg.copyTo(rectifiedRightImgColor);
+    }
     if(!rightOutPath.empty()){
         cv::imwrite(rightOutPath, rectifiedRightImgColor);
         std::cout << "Rectified right image saved to " << rightOutPath << std::endl;

@@ -38,10 +38,22 @@ NAMESPACE_BEGIN{ namespace camera{
         void write(cv::FileStorage& fs) const;
 
         /**
+         * @brief 把本对象序列化到文件中
+         * @param filename 文件路径
+         */
+        void write(const std::string& filename) const;
+
+        /**
          * @brief 从文件中读取本对象
          * @param fs 文件存储对象
          */
         void read(const cv::FileNode& fs);
+
+        /**
+         * @brief 从文件中读取本对象
+         * @param filename 文件路径
+         */
+        void read(const std::string& filename);
 
         /**
          * @brief 打印本对象的信息
@@ -50,6 +62,27 @@ NAMESPACE_BEGIN{ namespace camera{
          * @return std::ostream& 输出流对象
          */
         friend std::ostream& operator<<(std::ostream& os, const BinoCamera& camera);
+
+        /**
+         * @brief 从图片路径标定双目相机
+         * @param left_imagePath 左相机图片路径
+         * @param right_imagePath 右相机图片路径，这里的左右图片路径应该是对应的，即对于同一编号，左右两图拍摄同一场景
+         * @param boardSize 棋盘格尺寸
+         * @param squareSize 棋盘格格子尺寸
+         * @param left_camera 左相机模型，可以空缺，如果空缺，则采用left_imagePath中的图片标定
+         * @param right_camera 右相机模型，可以空缺，如果空缺，则采用right_imagePath中的图片标定
+         * @param out_rms 输出均方根误差，可以空缺，如果空缺，则不输出均方根误差
+         * @param verbose 是否打印详细信息，默认值为false
+         * @return BinoCamera 标定后的双目相机模型
+         */
+        static BinoCamera calibrate(const std::string& left_imagePath,
+                                    const std::string& right_imagePath,
+                                    cv::Size boardSize, 
+                                    double squareSize, 
+                                    const MonoCamera * left_camera = nullptr, 
+                                    const MonoCamera * right_camera = nullptr, 
+                                    double * out_rms = nullptr,
+                                    bool verbose = false);
     private:
         /**
          * @brief 初始化remap函数

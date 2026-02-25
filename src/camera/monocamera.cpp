@@ -43,10 +43,6 @@ NAMESPACE_BEGIN { namespace camera {
         return cv::Point2d(u, v);
     }
 
-    /**
-     * @brief 把本对象序列化到文件中
-     * @param fs 文件存储对象
-     */
     void MonoCamera::write(cv::FileStorage& fs) const {
         fs << "imageSize" << imageSize;
         fs << "K" << K;
@@ -55,10 +51,15 @@ NAMESPACE_BEGIN { namespace camera {
         fs << "t_w2c" << t_w2c;
     }
 
-    /**
-     * @brief 从文件中读取本对象
-     * @param fs 文件存储对象
-     */
+    void MonoCamera::write(const std::string& filename) const {
+        cv::FileStorage fs(filename, cv::FileStorage::WRITE);
+        if(!fs.isOpened()){
+            throw std::runtime_error(filename + " file not opened or existed");
+        }
+        write(fs);
+        fs.release();
+    }
+
     void MonoCamera::read(const cv::FileNode& fs) {
         fs["imageSize"] >> imageSize;
         fs["K"] >> K;
@@ -68,12 +69,37 @@ NAMESPACE_BEGIN { namespace camera {
         K_inv = K.inv();
     }
 
+    /**
+     * @brief 从文件中读取本对象
+     * @param filename 文件名
+     */
+    void MonoCamera::read(const std::string& filename) {
+        cv::FileStorage fs(filename, cv::FileStorage::READ);
+        if(!fs.isOpened()){
+            throw std::runtime_error(filename + " file not opened or exist");
+        }
+        read(fs.root());
+        fs.release();
+    }
+
     void MonoCamera::print() const {
         std::cout << "imageSize: " << imageSize << std::endl;
         std::cout << "K: " << K << std::endl;
         std::cout << "D: " << D << std::endl;
         std::cout << "R_w2c: " << R_w2c << std::endl;
         std::cout << "t_w2c: " << t_w2c << std::endl;
+    }
+
+    MonoCamera MonoCamera::calibrate(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, bool verbose){
+        MonoCamera ret;
+        calibratePinhole(imageFiles, boardSize, squareSize, ret, verbose);
+        return ret;
+    }
+
+    MonoCamera MonoCamera::calibrate(const std::string& imagePath, cv::Size boardSize, double squareSize, bool verbose){
+        MonoCamera ret;
+        calibratePinhole(imagePath, boardSize, squareSize, ret, verbose);
+        return ret;
     }
 
     double calibratePinhole(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose){
@@ -111,14 +137,14 @@ NAMESPACE_BEGIN { namespace camera {
 
             //调用函数寻找棋盘格角点
             std::vector<cv::Point2f> corners;
-            bool found = cv::findChessboardCorners(gray, boardSize, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
+            bool found = cv::findChessboardCorners(gray, boardSize, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
             if(!found){
                 std::cerr << "[Error] Cannot find chessboard corners in image " << file << std::endl;
                 continue;
             }
 
             //亚像素级精确化
-            cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1), cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.001));
+            cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1), cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 50, 0.001));
             
             //将当前图像的角点和对应的三维点添加到集合中
             imagePoints.push_back(corners);
@@ -143,18 +169,7 @@ NAMESPACE_BEGIN { namespace camera {
         cv::Mat K, D;
         std::vector<cv::Mat> rvecs, tvecs;
 
-        K = cv::initCameraMatrix2D(objectPoints, imagePoints, imgSize, 0);
-
-        double rms = cv::calibrateCamera(
-            objectPoints,
-            imagePoints,
-            imgSize,
-            K,
-            D,
-            rvecs,
-            tvecs,
-            cv::CALIB_FIX_ASPECT_RATIO
-        );
+        double rms = cv::calibrateCamera(objectPoints, imagePoints, imgSize, K, D, rvecs, tvecs);
 
         //填充结果
         camera_model.K = K.clone();

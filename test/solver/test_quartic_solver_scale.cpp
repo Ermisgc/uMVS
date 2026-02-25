@@ -1,8 +1,8 @@
 /**
- * @file 05_test_quartic_solver.cpp
- * @brief 测试脚本：测试四元一次方程求解器
+ * @file test_quartic_solver_scale.cpp
+ * @brief 测试脚本：大规模测试四元一次方程求解器
  * @example
- *     05_test_quartic_solver --random_number 42 --test_count 100
+ *     test_quartic_solver_scale --random_number 42 --test_count 100
  */
 
 #include <iostream>
@@ -90,7 +90,7 @@ bool run_test(const std::string& case_name, double A, double B, double C, double
 }
 
 int main(int argc, char* argv[]) {
-    argparse::ArgumentParser parser("05_test_quartic_solver");
+    argparse::ArgumentParser parser("test_quartic_solver_scale");
     parser.add_argument("--random_number", "-r").default_value(42).help("Random number for testing").scan<'i', int>();
     parser.add_argument("--test_count", "-n").default_value(100).help("Number of test cases to run").scan<'i', int>();
     try {

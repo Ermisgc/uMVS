@@ -6,6 +6,7 @@
 !.gitignore
 !CMakeLists.txt
 !autobuild.sh
+!ReadMe.md
 
 !src
 !src/**
@@ -18,3 +19,4 @@
 
 !models/
 !models/**
+

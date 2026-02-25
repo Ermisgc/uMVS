@@ -147,6 +147,25 @@ NAMESPACE_BEGIN { namespace camera {
          */
         friend std::ostream& operator<<(std::ostream& os, const BinoUWCamera& camera);
 
+        /**
+         * @brief 从图片路径标定水下双目相机
+         * @param left_imagePath 左相机图片路径
+         * @param right_imagePath 右相机图片路径，这里的左右图片路径应该是对应的，即对于同一编号，左右两图拍摄同一场景
+         * @param boardSize 棋盘格尺寸
+         * @param squareSize 棋盘格格子尺寸
+         * @param calibrated_camera 已标定的空气中的双目相机模型，用于初始化相机参数
+         * @param out_rms 输出均方根误差，可以空缺，如果空缺，则不输出均方根误差
+         * @param verbose 是否打印详细信息，默认值为false
+         * @return BinoUWCamera 标定后的水下双目相机模型
+         */
+        static BinoUWCamera calibrate(const std::string& left_imagePath,
+                                     const std::string& right_imagePath,
+                                     cv::Size boardSize, 
+                                     double squareSize, 
+                                     const BinoUWCamera& calibrated_camera,
+                                     double * out_rms = nullptr,
+                                     bool verbose = false);
+
     private:
         /**
          * @brief 初始化remap函数

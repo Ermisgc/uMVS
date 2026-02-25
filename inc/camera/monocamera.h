@@ -197,10 +197,22 @@ NAMESPACE_BEGIN { namespace camera {
         void write(cv::FileStorage& fs) const;
 
         /**
+         * @brief 把本对象序列化到文件中
+         * @param filename 文件名
+         */
+        void write(const std::string& filename) const;
+
+        /**
          * @brief 从文件中读取本对象
          * @param fs 文件存储对象
          */
         void read(const cv::FileNode& fs);
+
+        /**
+         * @brief 从文件中读取本对象
+         * @param filename 文件名
+         */
+        void read(const std::string& filename);
 
         /**
          * @brief 打印本对象的信息
@@ -214,6 +226,16 @@ NAMESPACE_BEGIN { namespace camera {
          * @return std::ostream& 输出流对象
          */
         friend std::ostream& operator<<(std::ostream& os, const MonoCamera& camera);
+
+        /**
+         * @brief 从一组图像标定针孔相机
+         */
+        static MonoCamera calibrate(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, bool verbose = false);
+
+        /**
+         * @brief 从图片路径标定针孔相机
+         */
+        static MonoCamera calibrate(const std::string& imagePath, cv::Size boardSize, double squareSize, bool verbose = false);
     };
 
     /**
@@ -228,7 +250,16 @@ NAMESPACE_BEGIN { namespace camera {
      */
     double calibratePinhole(const std::vector<std::string>& imageFiles, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose = false);
 
-    //这里改为了输入标定图片所处的文件夹，然后对该文件夹下的所有图片进行标定
+    /**
+     * @brief 针孔相机模型的标定方法
+     * 这里改为了输入标定图片所处的文件夹，然后对该文件夹下的所有图片进行标定
+     * @param imagePath 输入标定图片所处的文件夹路径
+     * @param boardSize 棋盘格角点数(cols, rows)，例如cv::Size(9, 6)表示9列6行
+     * @param squareSize 棋盘格每个格子的实际边长，单位为mm
+     * @param camera_model 输出的相机模型，以引用形式传递，标定完成后会被更新
+     * @param verbose 是否打印和显示详细信息，默认值为false
+     * @return double 标定误差，单位为mm
+     */
     double calibratePinhole(const std::string & imagePath, cv::Size boardSize, double squareSize, MonoCamera& camera_model, bool verbose = false);
 
     static inline void write(cv::FileStorage& fs, const std::string& name, const MonoCamera& camera) {

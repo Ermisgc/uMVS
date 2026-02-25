@@ -1,16 +1,16 @@
 /**
- * @file 04_test_uw_epipolar.cpp
+ * @file epipolar_uw.cpp
  * @brief 用于示例的代码，作用是计算水下双目相机的极线，这里仅限于计算右图像的极线
  * @author Ermis
  * @date 2026-1-10
- * @example ./bin/Release/04_test_uw_epipolar -m uw_camera_model.yml -r right.png -s -ro right_epi.png
+ * @example ./bin/Release/epipolar_uw -m uw_camera_model.yml -r right.png -s -ro right_epi.png
  */
 #include "camera/binouwcamera.h"
 #include "argparse/argparse.hpp"
 
 int main(int argc, char *argv[]){
     //参数解析
-    argparse::ArgumentParser program("04_test_uw_epipolar");
+    argparse::ArgumentParser program("epipolar_uw");
     program.add_argument("--model", "-m").required().help("Path to the uw binocular camera model file");
     program.add_argument("--left", "-l").required().help("Path to the left image file");
     program.add_argument("--right", "-r").required().help("Path to the right image file");

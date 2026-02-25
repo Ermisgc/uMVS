@@ -1,9 +1,9 @@
 /**
- * @file 06_test_reprojection_error.cpp
+ * @file test_reprojection_error.cpp
  * @brief 测试重投影误差
  * @version 0.1
  * @date 2026-01-25
- * @example 06_test_reprojection_error.exe -d 1000.0 -c mono_uw_0310_left.yaml -o error_map.png
+ * @example test_reprojection_error.exe -d 1000.0 -c mono_uw_0310_left.yaml -o error_map.png
  * @copyright Copyright (c) 2026
  * 
  */

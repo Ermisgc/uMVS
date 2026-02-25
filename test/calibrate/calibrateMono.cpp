@@ -1,11 +1,11 @@
 /**
- * @file 01_test_calibration.cpp
+ * @file calibrateMono.cpp
  * @author ermis
  * @date 2026-1-2
  * @brief 标定测试，读取本地标定板图片，然后执行相机标定
  * @example 使用示例为
  * @code
- * ./bin/Release/01_test_calibration --imgDir ./CbtCameraL --boardSize 11,8 --squareSize 15.0 --save calibrated_params.yaml --verbose
+ * ./bin/Release/calibrateMono --imgDir ./CbtCameraL --boardSize 11,8 --squareSize 15.0 --save calibrated_params.yaml --verbose
  * @endcode
  */
 

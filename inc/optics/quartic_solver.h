@@ -1,6 +1,5 @@
 /**
  * @brief 四元一次方程求解器
- * 
  */
 
 #ifndef QUARTIC_SOLVER_H

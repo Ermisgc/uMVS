@@ -284,4 +284,11 @@ NAMESPACE_BEGIN { namespace camera{
         os << "right_camera:" << std::endl << camera.right_camera_ << std::endl;
         return os;
     }
+
+    BinoUWCamera BinoUWCamera::calibrate(const std::string& left_imagePath, const std::string& right_imagePath,
+                                         cv::Size boardSize, double squareSize, const BinoUWCamera& calibrated_camera,
+                                         double * out_rms, bool verbose)
+    {
+        return BinoUWCamera();
+    }
 }}
