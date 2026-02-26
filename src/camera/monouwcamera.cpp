@@ -52,7 +52,10 @@ NAMESPACE_BEGIN { namespace camera {
     std::optional<Point2d> MonoUWCamera::forwardProject(const Vec3d& pw, ForwardMethod method) const{
         //首先将点从世界坐标系变换到相机坐标系
         Vec3d pc = camera_model_.worldToCam(pw);
+        return camToPixel(pc, method);
+    }
 
+    std::optional<Point2d> MonoUWCamera::camToPixel(const Vec3d& pc, ForwardMethod method) const{
         //深度检查：
         if(pc[2] <= d_housing_ + d_glass_ + 1e-3) return std::nullopt;  //点在单目水下相机内部或者太过接近，视为无效三维点
 
@@ -72,7 +75,7 @@ NAMESPACE_BEGIN { namespace camera {
             default:
                 return this->solveIterative(pc);
         }
-        return std::nullopt;
+        return std::nullopt;        
     }
 
     std::optional<Vec3d> MonoUWCamera::backwardProject(const Vec2d& uv, double depth) const{

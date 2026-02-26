@@ -72,7 +72,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param n0 空气的折射率
          * @param n1 玻璃的折射率
          * @param n2 水的折射率
-         * @param glass_normal 玻璃的法线，这里要注意玻璃的法线方向由光心指向相机外，如果不是这样的话，函数内部会自动取反
+         * @param glass_normal 玻璃的法线，相对于相机坐标系的法线方向，这里要注意玻璃的法线方向由光心指向相机外，如果不是这样的话，函数内部会自动取反
          * @details 构造函数内部将自己构造和装配折射平面
          */
         MonoUWCamera(const MonoCamera& camera_model, double d1, double d2, double n0, double n1, double n2, const Vec3d& glass_normal);
@@ -103,6 +103,9 @@ NAMESPACE_BEGIN { namespace camera {
             return pixelToWorldRay(pixel[0], pixel[1]);
         }
 
+        inline std::optional<optics::Ray> backwardProject(const cv::Point2f& pixel) const {
+            return backwardProject(cv::Vec2d(pixel.x, pixel.y));
+        }
 
         /**
          * @brief 将像素坐标(u, v)转换为相机坐标系下的折射射线
@@ -144,6 +147,14 @@ NAMESPACE_BEGIN { namespace camera {
         inline std::optional<optics::Ray> pixelToWorldRay(const Vec2d& pixel) const {
             return pixelToWorldRay(pixel[0], pixel[1]);
         }
+
+        /**
+         * @brief 将相机坐标系下的点转换为像素坐标
+         * @param Pc 相机坐标系下的点
+         * @param method 正向投影方法，默认采用迭代法
+         * @return std::optional<Point2d> 成像坐标系下的点，若点在相机的成像平面外，则返回空
+         */
+        std::optional<Point2d> camToPixel(const Vec3d& Pc, ForwardMethod method=ForwardMethod::ITERATE) const;
 
         /**
          * @brief 把本对象序列化到文件中

@@ -31,6 +31,9 @@ NAMESPACE_BEGIN{ namespace camera{
          */
         std::pair<cv::Mat, cv::Mat> rectify(const cv::Mat& left_img, const cv::Mat& right_img);
 
+        const MonoCamera& left() const { return left_camera; }
+        const MonoCamera& right() const { return right_camera; }
+
         /**
          * @brief 把本对象序列化到文件中
          * @param fs 文件存储对象

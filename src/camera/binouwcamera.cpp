@@ -1,4 +1,6 @@
 #include "camera/binouwcamera.h"
+#include "optics/nsga2.h"
+#include "optics/geometry.h"
 NAMESPACE_BEGIN { namespace camera{
     std::vector<Point2d> BinoUWCamera::computeEpipolarCurve(const Vec2d& left_pixel, const std::vector<double>& depths) const {
         std::vector<Point2d> curve_points;
@@ -99,6 +101,9 @@ NAMESPACE_BEGIN { namespace camera{
         }
         if(left_img.size() != imgSize || right_img.size() != imgSize){
             throw std::invalid_argument("BinocularCamera::rectify: image size not match");
+        }
+        if(!is_init){
+            throw std::runtime_error("BinocularCamera::rectify: camera not initialized");
         }
 
         cv::Mat left_rectified, right_rectified;
@@ -270,12 +275,13 @@ NAMESPACE_BEGIN { namespace camera{
                 map_x_r.at<float>(v_f, u_f) = pixel_raw.value().x;
                 map_y_r.at<float>(v_f, u_f) = pixel_raw.value().y;
             }
-        }    
+        }
         
         this->left_map_x_ = map_x_l;
         this->left_map_y_ = map_y_l;
         this->right_map_x_ = map_x_r;
         this->right_map_y_ = map_y_r;
+        is_init = true;
     }
 
     std::ostream& operator<<(std::ostream& os, const BinoUWCamera& camera){
@@ -284,6 +290,223 @@ NAMESPACE_BEGIN { namespace camera{
         os << "right_camera:" << std::endl << camera.right_camera_ << std::endl;
         return os;
     }
+
+    void BinoUWCamera::reconstruct(const std::vector<cv::Point2f>& left_pts, 
+                    const std::vector<cv::Point2f>& right_pts, 
+                    std::vector<cv::Point3d>& reconstructed_pts) const
+    {
+        CV_Assert(left_pts.size() == right_pts.size());
+        using namespace optics;
+        reconstructed_pts.clear();
+        reconstructed_pts.reserve(left_pts.size());
+        const auto & left_camera = this->left_camera_;
+        const auto & right_camera = this->right_camera_;
+
+        int n = left_pts.size();
+        for(int i = 0; i < n; ++i){
+            auto left_ray = left_camera.backwardProject(left_pts[i]);
+            auto right_ray = right_camera.backwardProject(right_pts[i]); //TODO:检查是否是世界坐标系下的
+            if(!left_ray.has_value() || !right_ray.has_value()){
+                reconstructed_pts.push_back(cv::Point3d(0.0, 0.0, 0.0));
+                continue;
+            }
+            auto mid = intersect(left_ray.value(), right_ray.value());
+            if(!mid.has_value()){
+                reconstructed_pts.push_back(cv::Point3d(0.0, 0.0, 0.0));
+                continue;
+            }
+            reconstructed_pts.push_back(mid.value());
+        }
+    }
+
+    using optics::NSGAOptimizer;
+    using optics::IMultiObjectiveProblem;
+
+    /**
+     * @brief 内部类，仅针对6个折射参数的标定问题
+     */
+    class RefractiveCalibrationProblem: public IMultiObjectiveProblem{
+    private:
+        std::vector<std::vector<cv::Point2f>> left_pts_;  //左图上观测的像素点，大小为k * N
+        std::vector<std::vector<cv::Point2f>> right_pts_; //右图上观测的像素点，大小为k * N
+        cv::Size m_boardSize_; //棋盘栅格大小
+        double m_squareSize_; //棋盘栅格边长尺寸
+        BinoCamera camera_;
+        double d0_designed_;
+        double d1_designed_;
+        double n0_;
+        double n1_;
+        double n2_;
+        const int m_numVariables = 6;  //六个参数，d0_l, d0_r, θ_l, θ_r, φ_l, φ_r
+        const int m_numObjectives = 3;
+    public:
+        RefractiveCalibrationProblem(const std::vector<std::vector<cv::Point2f>>& left_pts,
+                                     const std::vector<std::vector<cv::Point2f>>& right_pts,
+                                     cv::Size boardSize, double squareSize, const BinoCamera& camera, 
+                                     double d0_designed = 100.0, double d1_designed = 5.0, double n0 = 1.0,
+                                     double n1 = 1.5, double n2 = 1.333)
+        {
+            left_pts_ = left_pts;
+            right_pts_ = right_pts;
+            CV_Assert(left_pts_.size() == right_pts_.size()); //左右图的图片数量应该是一致的
+            m_boardSize_ = boardSize;
+            m_squareSize_ = squareSize;
+            camera_ = camera;
+            d0_designed_ = d0_designed;
+            d1_designed_ = d1_designed;
+            n0_ = n0;
+            n1_ = n1;
+            n2_ = n2;
+        }
+        
+        ~RefractiveCalibrationProblem() override = default;
+
+        int getVariableCount() const override { return m_numVariables; }
+
+        int getObjectiveCount() const override { return m_numObjectives; }
+
+        #ifndef M_PI
+        #define M_PI 3.14159265358979323846
+        #endif
+        void getBounds(cv::Mat& lowerBounds, cv::Mat& upperBounds) const override{
+            // 每个参数的范围：
+            // d0_l, d0_r: [0, d0_designed]，
+            // θ_l, θ_r: [-π/2, π/2]，这里假设倾斜角和方位角都在[-π/2, π/2]范围内
+            // φ_l, φ_r: [-π/2, π/2]，这里假设倾斜角和方位角都在[-π/2, π/2]范围内
+            lowerBounds = (cv::Mat_<double>(1, m_numVariables) << 0.0, 0.0, -M_PI / 2.0, -M_PI / 2.0, -M_PI / 2.0, -M_PI / 2.0);
+            upperBounds = (cv::Mat_<double>(1, m_numVariables) << d0_designed_, d0_designed_, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0);
+        }
+
+        void evaluate(cv::InputArray populationVars, cv::OutputArray out_populationObjs) const override{
+            auto vars = populationVars.getMat();
+            int N = vars.rows;
+            int frames = left_pts_.size();
+            cv::Mat objs(N, m_numObjectives, CV_64FC1);
+
+            for(int i = 0;i < N;++i){
+                const double * x = vars.ptr<double>(i);
+                double * f = objs.ptr<double>(i);
+                double d0_l = x[0];
+                double d0_r = x[1];
+                double theta_l = x[2];
+                double theta_r = x[3];
+                double phi_l = x[4];
+                double phi_r = x[5];
+
+                //组装为向量
+                cv::Vec3d glass_normal_l(cos(phi_l) * sin(theta_l), sin(phi_l) * sin(theta_l), cos(theta_l));
+                cv::Vec3d glass_normal_r(cos(phi_r) * sin(theta_r), sin(phi_r) * sin(theta_r), cos(theta_r));
+
+                const MonoCamera & left_camera = camera_.left();
+                const MonoCamera & right_camera = camera_.right();
+
+                //TODO:做check
+                MonoUWCamera left_camera_uw(left_camera, d0_l, d1_designed_, n0_, n1_, n2_, glass_normal_l);
+                MonoUWCamera right_camera_uw(right_camera, d0_r, d1_designed_, n0_, n1_, n2_, glass_normal_r);
+                BinoUWCamera bino_camera(left_camera_uw, right_camera_uw);
+                double E_rep = 0.0, E_scale = 0.0, E_planar = 0.0;  //三个误差损失函数
+
+                //遍历棋盘格上所有角点
+                size_t valid_count_of_proj = 0;
+                size_t valid_count_of_scale = 0;
+                size_t valid_count_of_planar = 0;
+                for(int k = 0; k < frames; ++k){
+                    const auto & pts_l = left_pts_[k];
+                    const auto & pts_r = right_pts_[k];
+                    if(pts_l.size() != pts_r.size()) continue;
+
+                    std::vector<cv::Point3d> reconstructed_pts;
+                    bino_camera.reconstruct(pts_l, pts_r, reconstructed_pts);
+
+                    //重投影误差E_reproj的计算
+                    for(size_t p = 0;p < reconstructed_pts.size();++p){
+                        const auto & Pw = reconstructed_pts[p];
+                        if(cv::norm(Pw) < optics::epsilon()) continue;
+                        const auto & p_l = pts_l[p];
+                        const auto & p_r = pts_r[p];
+                        
+                        auto proj_l = left_camera_uw.camToPixel(Pw, ForwardMethod::ITERATE_HELLAY);
+                        if(!proj_l.has_value()) continue;
+                        auto proj_r = right_camera_uw.camToPixel(Pw, ForwardMethod::ITERATE_HELLAY);
+                        if(!proj_r.has_value()) continue;
+                        
+                        double err_l = cv::norm(p_l - (cv::Point2f)proj_l.value());
+                        double err_r = cv::norm(p_r - (cv::Point2f)proj_r.value());
+                        E_rep += huberLoss(err_l) + huberLoss(err_r);
+                        valid_count_of_proj++;
+                    }
+
+                    //E_scale的计算
+                    int board_width = m_boardSize_.width, board_height = m_boardSize_.height;
+                    static const double sqrt_2 = std::sqrt(2.0);
+                    double diagSize = m_squareSize_ * sqrt_2;
+                    for(int r = 0; r < board_height - 1; ++r){
+                        for(int c = 0; c < board_width - 1; ++c){
+                            int idx = r * board_width + c;  //当前在1D vector中的索引
+                            const cv::Point3d & p_current = reconstructed_pts[idx];
+                            const cv::Point3d & p_right = reconstructed_pts[idx + 1];  //当前点的右边点
+                            const cv::Point3d & P_rb = reconstructed_pts[idx + board_width + 1];  //右下角的点
+                            if(cv::norm(p_current) < optics::epsilon()) continue;
+                            if(cv::norm(p_right) < optics::epsilon()) continue;
+                            if(cv::norm(P_rb) < optics::epsilon()) continue;
+                            
+                            double err_r = std::abs(cv::norm(p_right - p_current) - m_squareSize_);
+                            double err_diag = std::abs(cv::norm(P_rb - p_current) - diagSize);
+
+                            E_scale += err_r + err_diag / sqrt_2;
+                            valid_count_of_scale++;
+                        }
+                    }
+                    
+                    //E_planar的计算
+                    if(reconstructed_pts.size() < 3) continue; //拟合不出平面来
+                    cv::Vec3d centroid(0, 0, 0);
+                    int pts_size = reconstructed_pts.size();
+                    int valid_pts_size = 0;
+                    for(int j = 0;j < pts_size; ++j){
+                        if(cv::norm(reconstructed_pts[j]) < optics::epsilon()) continue;
+                        centroid += cv::Vec3d(reconstructed_pts[j].x, reconstructed_pts[j].y, reconstructed_pts[j].z);
+                        valid_pts_size++;
+                    } 
+                    centroid /= (double)valid_pts_size;
+
+                    cv::Matx33d cov(0, 0, 0, 0, 0, 0, 0, 0, 0);
+                    for(int j = 0;j < pts_size; ++j){
+                        if(cv::norm(reconstructed_pts[j]) < optics::epsilon()) continue;
+                        cv::Vec3d diff = cv::Vec3d(reconstructed_pts[j].x, reconstructed_pts[j].y, reconstructed_pts[j].z) - centroid;
+                        cov(0, 0) += diff[0] * diff[0]; cov(0, 1) += diff[0] * diff[1]; cov(0, 2) += diff[0] * diff[2];
+                        cov(1, 0) += diff[1] * diff[0]; cov(1, 1) += diff[1] * diff[1]; cov(1, 2) += diff[1] * diff[2];
+                        cov(2, 0) += diff[2] * diff[0]; cov(2, 1) += diff[2] * diff[1]; cov(2, 2) += diff[2] * diff[2];
+                    }
+
+                    cv::Matx31d evals;
+                    cv::Matx33d evecs;
+                    cv::eigen(cov, evals, evecs);  //求特征值，并将特征值按从大到小排序
+                    cv::Vec3d normal(evecs(2, 0), evecs(2, 1), evecs(2, 2));  //取特征向量对应的最后一列，即特征值最小的特征向量，对应于平面的法向量
+                    for(int j = 0;j < pts_size; ++j){
+                        if(cv::norm(reconstructed_pts[j]) < optics::epsilon()) continue;
+                        cv::Vec3d diff = cv::Vec3d(reconstructed_pts[j].x, reconstructed_pts[j].y, reconstructed_pts[j].z) - centroid;
+                        E_planar += std::abs(diff.dot(normal));
+                        valid_count_of_planar++;
+                    }
+                }
+
+                f[0] = valid_count_of_proj > 0 ? E_rep / valid_count_of_proj : 1e9;
+                f[1] = valid_count_of_scale > 0 ? E_scale / valid_count_of_scale : 1e9;
+                f[2] = valid_count_of_planar > 0 ? E_planar / valid_count_of_planar : 1e9;
+            }
+
+            if(out_populationObjs.needed()){
+                objs.copyTo(out_populationObjs);
+            }
+        }    
+    private:
+        double huberLoss(double x, double delta = 1.0) const{
+            double abs_x = std::abs(x);
+            if(abs_x <= delta) return 0.5 * x * x;
+            else return delta * abs_x - 0.5 * delta * delta;
+        }
+    };
 
     BinoUWCamera BinoUWCamera::calibrate(const std::string& left_imagePath, const std::string& right_imagePath,
                                          cv::Size boardSize, double squareSize, const BinoUWCamera& calibrated_camera,

@@ -20,3 +20,5 @@
 !models/
 !models/**
 
+!third_party/
+!third_party/**

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include "utils.h"
 #include "monouwcamera.h"
+#include "binocamera.h"
 
 NAMESPACE_BEGIN { namespace camera {
 
@@ -43,6 +44,7 @@ NAMESPACE_BEGIN { namespace camera {
         Matx33d R_rel_norm;             ///< 左相机到右相机的旋转矩阵（折射轴归一化后）
         Vec3d T_rel_norm;               ///< 左相机到右相机的平移向量（折射轴归一化后）
         Size imgSize;                   ///< 图像尺寸
+        bool is_init = false;           ///< 是否初始化
 
     public:
         BinoUWCamera() = default;
@@ -52,10 +54,10 @@ NAMESPACE_BEGIN { namespace camera {
          * @param left 左相机模型
          * @param right 右相机模型
          */
-        BinoUWCamera(const MonoUWCamera& left, const MonoUWCamera& right) 
+        BinoUWCamera(const MonoUWCamera& left, const MonoUWCamera& right, bool init = true) 
             : left_camera_(left), right_camera_(right) 
         {
-            initRemap(left, right);
+            if(init) initRemap(left, right);
         }
 
         /**
@@ -140,6 +142,16 @@ NAMESPACE_BEGIN { namespace camera {
         std::pair<cv::Mat, cv::Mat> rectify(const cv::Mat& left_img, const cv::Mat& right_img) const;
 
         /**
+         * @brief 从左右图的对应角点重建3D点
+         * @param left_pts 左图中的角点坐标
+         * @param right_pts 右图中的角点坐标，与左图中的角点一一对应
+         * @param reconstructed_pts 输出的重建3D点坐标
+         */
+        void reconstruct(const std::vector<cv::Point2f>& left_pts, 
+                         const std::vector<cv::Point2f>& right_pts, 
+                         std::vector<cv::Point3d>& reconstructed_pts) const;
+
+        /**
          * @brief 打印本对象的信息
          * @param os 输出流对象
          * @param camera 双目相机模型对象
@@ -174,7 +186,6 @@ NAMESPACE_BEGIN { namespace camera {
          */
         void initRemap(const MonoUWCamera& left_camera, const MonoUWCamera& right_camera);        
     };
-
 }}
 
 #endif // U3D_BINO_UWCAMERA_H

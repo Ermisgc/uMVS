@@ -25,7 +25,7 @@ using namespace NAMESPACE_U3D::optics;
 using namespace NAMESPACE_U3D::camera;
 
 int main(int argc, char** argv) {
-    argparse::ArgumentParser parser("06_test_reprojection_error");
+    argparse::ArgumentParser parser("test_reprojection_error");
     parser.add_argument("--depth_value", "-d").default_value(1000.0).help("Depth value of water plane").scan<'g', double>();
     parser.add_argument("--camera_path", "-c").default_value("mono_uw_0310_left.yaml").help("Path to camera calibration file");
     parser.add_argument("--output", "-o").help("Path to output error map image");

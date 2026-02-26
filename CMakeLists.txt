@@ -1,7 +1,14 @@
-cmake_minimum_required(VERSION 3.10)
-project(MyU3D)
+cmake_minimum_required(VERSION 3.16)
+project(MyU3D VERSION 1.0)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)  # 关闭 GNU 扩展
+
+# 设置构建类型
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel" FORCE)
+endif()
 
 if(MSVC)
     # 启用 C++ 异常处理
@@ -15,6 +22,9 @@ if(MSVC)
                         _CRT_NONSTDC_NO_DEPRECATE
                         _HAS_STD_BYTE=0
                         )
+else()
+    # GCC/Clang配置
+    add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -24,11 +34,15 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/inc)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen3)
 
-
 set(ALL_LIBS ${OpenCV_LIBS})
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-set(LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+
+ # TODO:设置现在的可执行文件直接放到项目文件里，后续发布时再放到CMAKE_BINARY_DIR
+set(U3D_CURRENT_OUTPUT ${PROJECT_SOURCE_DIR}) 
+set(LIBRARY_OUTPUT_DIRECTORY ${U3D_CURRENT_OUTPUT}/lib)
+
 link_directories(${LIBRARY_OUTPUT_DIRECTORY})
+
+option(BUILD_TESTS "Build test programs" ON)
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 add_subdirectory(${PROJECT_SOURCE_DIR}/test)
