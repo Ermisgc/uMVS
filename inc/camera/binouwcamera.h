@@ -54,11 +54,7 @@ NAMESPACE_BEGIN { namespace camera {
          * @param left 左相机模型
          * @param right 右相机模型
          */
-        BinoUWCamera(const MonoUWCamera& left, const MonoUWCamera& right, bool init = true) 
-            : left_camera_(left), right_camera_(right) 
-        {
-            if(init) initRemap(left, right);
-        }
+        BinoUWCamera(const MonoUWCamera& left, const MonoUWCamera& right, bool init = true) ;
 
         /**
          * @brief 获取左相机引用
@@ -168,15 +164,27 @@ NAMESPACE_BEGIN { namespace camera {
          * @param calibrated_camera 已标定的空气中的双目相机模型，用于初始化相机参数
          * @param out_rms 输出均方根误差，可以空缺，如果空缺，则不输出均方根误差
          * @param verbose 是否打印详细信息，默认值为false
+         * @param d0_designed 设计的深度参数d0，默认值为100.0
+         * @param d1_designed 设计的深度参数d1，默认值为5.0 
+         * @param n0 设计的折射率n0，默认值为1.0
+         * @param n1 设计的折射率n1，默认值为1.50
+         * @param n2 设计的折射率n2，默认值为1.33
+         * @param log_file 日志文件路径，默认值为"calibrateBinoUW_log.csv"
          * @return BinoUWCamera 标定后的水下双目相机模型
          */
         static BinoUWCamera calibrate(const std::string& left_imagePath,
                                      const std::string& right_imagePath,
                                      cv::Size boardSize, 
                                      double squareSize, 
-                                     const BinoUWCamera& calibrated_camera,
+                                     const BinoCamera& calibrated_camera,
                                      double * out_rms = nullptr,
-                                     bool verbose = false);
+                                     bool verbose = false,
+                                     double d0_designed = 30.0,
+                                     double d1_designed = 5.0,
+                                     double n0 = 1.0,
+                                     double n1 = 1.50,
+                                     double n2 = 1.33,
+                                     const std::string & log_file = "calibrateBinoUW_log.csv");
 
     private:
         /**

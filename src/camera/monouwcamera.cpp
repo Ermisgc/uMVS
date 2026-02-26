@@ -323,7 +323,7 @@ NAMESPACE_BEGIN { namespace camera {
         double da2 = da * da;
 
         // Halley 迭代主循环
-        for (int i = 0; i < 5; ++i) { // 通常 2-3 次即可收敛
+        for (int i = 0; i < 10; ++i) { // 通常 2-3 次即可收敛
             // 中间变量 S = sqrt((1-mu^2)r^2 + da^2)
             double r2 = r * r;
             double Sg2 = (1 - mu_g * mu_g) * r2 + da2;

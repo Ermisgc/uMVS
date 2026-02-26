@@ -36,6 +36,22 @@ NAMESPACE_BEGIN{
         std::uniform_int_distribution<int> dis(50, 255);
         return cv::Scalar(dis(gen), dis(gen), dis(gen));
     }
+
+    /**
+     * @brief 作用域定时器，用于测量代码块的执行时间，注意只能在单线程环境下使用
+     * @param name 定时器名称，用于在输出中标识不同的代码块
+     */
+    struct ScopedTimer {
+        std::string name;
+        std::chrono::high_resolution_clock::time_point start;
+
+        ScopedTimer(const std::string& n) : name(n), start(std::chrono::high_resolution_clock::now()) {}
+        ~ScopedTimer() {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+            std::cout << "[Profiler] " << name << " took: " << duration / 1000.0 << " ms\n";
+        }
+    };
 }
 
 #endif

@@ -15,6 +15,9 @@ target_link_libraries(calibrateMono ${PROJECT_NAME} ${ALL_LIBS})
 add_executable(calibrateBino calibrateBino.cpp)
 target_link_libraries(calibrateBino ${PROJECT_NAME} ${ALL_LIBS})
 
+add_executable(calibrateBinoUW calibrateBinoUW.cpp)
+target_link_libraries(calibrateBinoUW ${PROJECT_NAME} ${ALL_LIBS} OpenMP::OpenMP_CXX)
+
 add_executable(rectify rectify.cpp)
 target_link_libraries(rectify ${PROJECT_NAME} ${ALL_LIBS})
 

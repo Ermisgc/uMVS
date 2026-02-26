@@ -1,7 +1,23 @@
 #include "camera/binouwcamera.h"
 #include "optics/nsga2.h"
 #include "optics/geometry.h"
+#include <fstream>
+#include <iomanip>
 NAMESPACE_BEGIN { namespace camera{
+    BinoUWCamera::BinoUWCamera(const MonoUWCamera& left, const MonoUWCamera& right, bool init) 
+        : left_camera_(left), right_camera_(right) 
+    {
+        if(init) initRemap(left, right);
+        else{
+            const auto & left_pinhole = left.pinhole();
+            const auto & right_pinhole = right.pinhole();
+            Matx33d R_l = left_pinhole.R_w2c, R_r = right_pinhole.R_w2c;
+            Vec3d t_l = left_pinhole.t_w2c, t_r = right_pinhole.t_w2c;
+            this->R_l2r = R_r * R_l.t();
+            this->t_l2r = t_r - this->R_l2r * t_l;            
+        }
+    }
+
     std::vector<Point2d> BinoUWCamera::computeEpipolarCurve(const Vec2d& left_pixel, const std::vector<double>& depths) const {
         std::vector<Point2d> curve_points;
         curve_points.reserve(depths.size());
@@ -114,8 +130,8 @@ NAMESPACE_BEGIN { namespace camera{
 
     void BinoUWCamera::initRemap(const MonoUWCamera& left_camera, const MonoUWCamera& right_camera){
         using namespace NAMESPACE_U3D::optics;
-        auto left_pinhole = left_camera.pinhole();
-        auto right_pinhole = right_camera.pinhole();
+        const auto & left_pinhole = left_camera.pinhole();
+        const auto & right_pinhole = right_camera.pinhole();
 
         //初始化相机参数
         this->imgSize = left_pinhole.imageSize;
@@ -339,11 +355,12 @@ NAMESPACE_BEGIN { namespace camera{
         double n2_;
         const int m_numVariables = 6;  //六个参数，d0_l, d0_r, θ_l, θ_r, φ_l, φ_r
         const int m_numObjectives = 3;
+        double max_tolerable_reproj = std::numeric_limits<double>::max();  //TODO: 应该根据实际情况调整
     public:
         RefractiveCalibrationProblem(const std::vector<std::vector<cv::Point2f>>& left_pts,
                                      const std::vector<std::vector<cv::Point2f>>& right_pts,
                                      cv::Size boardSize, double squareSize, const BinoCamera& camera, 
-                                     double d0_designed = 100.0, double d1_designed = 5.0, double n0 = 1.0,
+                                     double d0_designed = 30.0, double d1_designed = 5.0, double n0 = 1.0,
                                      double n1 = 1.5, double n2 = 1.333)
         {
             left_pts_ = left_pts;
@@ -373,8 +390,8 @@ NAMESPACE_BEGIN { namespace camera{
             // d0_l, d0_r: [0, d0_designed]，
             // θ_l, θ_r: [-π/2, π/2]，这里假设倾斜角和方位角都在[-π/2, π/2]范围内
             // φ_l, φ_r: [-π/2, π/2]，这里假设倾斜角和方位角都在[-π/2, π/2]范围内
-            lowerBounds = (cv::Mat_<double>(1, m_numVariables) << 0.0, 0.0, -M_PI / 2.0, -M_PI / 2.0, -M_PI / 2.0, -M_PI / 2.0);
-            upperBounds = (cv::Mat_<double>(1, m_numVariables) << d0_designed_, d0_designed_, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0);
+            lowerBounds = (cv::Mat_<double>(1, m_numVariables) << 0.6 * d0_designed_, 0.6 * d0_designed_, -M_PI / 2.0, -M_PI / 2.0, -M_PI / 2.0, -M_PI / 2.0);
+            upperBounds = (cv::Mat_<double>(1, m_numVariables) << 1.5 * d0_designed_, 1.5 * d0_designed_, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0);
         }
 
         void evaluate(cv::InputArray populationVars, cv::OutputArray out_populationObjs) const override{
@@ -383,27 +400,11 @@ NAMESPACE_BEGIN { namespace camera{
             int frames = left_pts_.size();
             cv::Mat objs(N, m_numObjectives, CV_64FC1);
 
+            #pragma omp parallel for
             for(int i = 0;i < N;++i){
                 const double * x = vars.ptr<double>(i);
                 double * f = objs.ptr<double>(i);
-                double d0_l = x[0];
-                double d0_r = x[1];
-                double theta_l = x[2];
-                double theta_r = x[3];
-                double phi_l = x[4];
-                double phi_r = x[5];
-
-                //组装为向量
-                cv::Vec3d glass_normal_l(cos(phi_l) * sin(theta_l), sin(phi_l) * sin(theta_l), cos(theta_l));
-                cv::Vec3d glass_normal_r(cos(phi_r) * sin(theta_r), sin(phi_r) * sin(theta_r), cos(theta_r));
-
-                const MonoCamera & left_camera = camera_.left();
-                const MonoCamera & right_camera = camera_.right();
-
-                //TODO:做check
-                MonoUWCamera left_camera_uw(left_camera, d0_l, d1_designed_, n0_, n1_, n2_, glass_normal_l);
-                MonoUWCamera right_camera_uw(right_camera, d0_r, d1_designed_, n0_, n1_, n2_, glass_normal_r);
-                BinoUWCamera bino_camera(left_camera_uw, right_camera_uw);
+                BinoUWCamera bino_camera = componentCamera(x);
                 double E_rep = 0.0, E_scale = 0.0, E_planar = 0.0;  //三个误差损失函数
 
                 //遍历棋盘格上所有角点
@@ -425,17 +426,17 @@ NAMESPACE_BEGIN { namespace camera{
                         const auto & p_l = pts_l[p];
                         const auto & p_r = pts_r[p];
                         
-                        auto proj_l = left_camera_uw.camToPixel(Pw, ForwardMethod::ITERATE_HELLAY);
+                        auto proj_l = bino_camera.left().forwardProject(Pw, ForwardMethod::ITERATE_HELLAY);
                         if(!proj_l.has_value()) continue;
-                        auto proj_r = right_camera_uw.camToPixel(Pw, ForwardMethod::ITERATE_HELLAY);
+                        auto proj_r = bino_camera.right().forwardProject(Pw, ForwardMethod::ITERATE_HELLAY);
                         if(!proj_r.has_value()) continue;
                         
                         double err_l = cv::norm(p_l - (cv::Point2f)proj_l.value());
                         double err_r = cv::norm(p_r - (cv::Point2f)proj_r.value());
-                        E_rep += huberLoss(err_l) + huberLoss(err_r);
-                        valid_count_of_proj++;
+                        E_rep += err_l + err_r;
+                        valid_count_of_proj += 2;
                     }
-
+                    
                     //E_scale的计算
                     int board_width = m_boardSize_.width, board_height = m_boardSize_.height;
                     static const double sqrt_2 = std::sqrt(2.0);
@@ -491,15 +492,37 @@ NAMESPACE_BEGIN { namespace camera{
                     }
                 }
 
-                f[0] = valid_count_of_proj > 0 ? E_rep / valid_count_of_proj : 1e9;
-                f[1] = valid_count_of_scale > 0 ? E_scale / valid_count_of_scale : 1e9;
-                f[2] = valid_count_of_planar > 0 ? E_planar / valid_count_of_planar : 1e9;
+                f[0] = valid_count_of_proj > 0 ? E_rep / valid_count_of_proj : std::numeric_limits<double>::max();
+                f[1] = valid_count_of_scale > 0 ? E_scale / valid_count_of_scale : std::numeric_limits<double>::max();
+                f[2] = valid_count_of_planar > 0 ? E_planar / valid_count_of_planar : std::numeric_limits<double>::max();
+
+                if(f[0] > max_tolerable_reproj) {
+                    f[1] = std::numeric_limits<double>::max();
+                    f[2] = std::numeric_limits<double>::max();
+                }
             }
 
             if(out_populationObjs.needed()){
                 objs.copyTo(out_populationObjs);
             }
         }    
+
+        BinoUWCamera componentCamera(const double * cv_rows) const{
+            double d0_l = cv_rows[0], d0_r = cv_rows[1];
+            double theta_l = cv_rows[2], theta_r = cv_rows[3];
+            double phi_l = cv_rows[4], phi_r = cv_rows[5];
+
+            cv::Vec3d glass_normal_l(cos(phi_l) * sin(theta_l), sin(phi_l) * sin(theta_l), cos(theta_l));
+            cv::Vec3d glass_normal_r(cos(phi_r) * sin(theta_r), sin(phi_r) * sin(theta_r), cos(theta_r));
+
+            const MonoCamera & left_camera = camera_.left();
+            const MonoCamera & right_camera = camera_.right();
+
+            //TODO:做check
+            MonoUWCamera left_camera_uw(left_camera, d0_l, d1_designed_, n0_, n1_, n2_, glass_normal_l);
+            MonoUWCamera right_camera_uw(right_camera, d0_r, d1_designed_, n0_, n1_, n2_, glass_normal_r);
+            return BinoUWCamera(left_camera_uw, right_camera_uw, false);
+        }
     private:
         double huberLoss(double x, double delta = 1.0) const{
             double abs_x = std::abs(x);
@@ -509,9 +532,130 @@ NAMESPACE_BEGIN { namespace camera{
     };
 
     BinoUWCamera BinoUWCamera::calibrate(const std::string& left_imagePath, const std::string& right_imagePath,
-                                         cv::Size boardSize, double squareSize, const BinoUWCamera& calibrated_camera,
-                                         double * out_rms, bool verbose)
+                                         cv::Size boardSize, double squareSize, const BinoCamera& calibrated_camera,
+                                         double * out_rms, bool verbose, double d0_designed, double d1_designed, 
+                                         double n0, double n1, double n2, const std::string& log_file)
     {
-        return BinoUWCamera();
+        std::vector<cv::String> left_files, right_files;
+        cv::glob(left_imagePath, left_files, false);
+        cv::glob(right_imagePath, right_files, false);
+        std::sort(left_files.begin(), left_files.end());
+        std::sort(right_files.begin(), right_files.end());
+
+        if(left_files.size() != right_files.size() || left_files.size() == 0){
+            throw std::runtime_error("Calibration failed: Left and right image files must have the same number and be non-empty.");
+        }
+        std::vector<std::vector<cv::Point2f>> left_pts_all;
+        std::vector<std::vector<cv::Point2f>> right_pts_all;
+
+        for(int i = 0;i < left_files.size(); ++i){
+            cv::Mat imgL = cv::imread(left_files[i], cv::IMREAD_GRAYSCALE);
+            cv::Mat imgR = cv::imread(right_files[i], cv::IMREAD_GRAYSCALE);
+            if(imgL.empty() || imgR.empty()) continue;
+
+            std::vector<cv::Point2f> cornersL, cornersR;
+            bool success_left = cv::findChessboardCorners(imgL, boardSize, cornersL, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+            bool success_right = cv::findChessboardCorners(imgR, boardSize, cornersR, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+            if(!success_left || !success_right){
+                if(verbose) std::cout << "Warning: Failed to find chessboard corners in image pair " << i << std::endl;
+                continue;
+            }
+
+            cv::cornerSubPix(imgL, cornersL, cv::Size(11, 11), cv::Size(-1, -1), cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 50, 0.001));
+            cv::cornerSubPix(imgR, cornersR, cv::Size(11, 11), cv::Size(-1, -1), cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 50, 0.001));
+
+            left_pts_all.push_back(cornersL);
+            right_pts_all.push_back(cornersR);
+        }
+
+        if(left_pts_all.empty()){
+            throw std::runtime_error("Calibration failed: No valid chessboard corners found.");
+        }
+
+        auto problem = std::make_shared<RefractiveCalibrationProblem>(left_pts_all, right_pts_all, boardSize, squareSize, calibrated_camera, d0_designed, d1_designed, n0, n1, n2);
+        if(verbose) std::cout << "Starting NSGA-II Refractive Calibration Optimization..." << std::endl;
+
+        //优化器参数
+        optics::OptimizerConfig config;
+        config.populationSize = 1000;
+        config.maxGenerations = 200;
+        config.crossoverProb = 0.9;
+        config.mutationProb = 0.1 / problem->getVariableCount();
+        config.crossoverDistribution = 5.0;
+        config.mutationDistribution = 5.0;
+        std::ofstream log_file_stream(log_file);
+        if(!log_file_stream.is_open()){
+            throw std::runtime_error("Calibration failed: Failed to open log file.");
+        }
+
+        // 写入表头
+        log_file_stream << "Iteration,Min_E_rep,Min_E_scale,Min_E_planar,Max_E_rep,Max_E_scale,Max_E_planar" << std::endl;
+
+        //设置优化器的回调函数，这里用折线图来展示每一代的最优解的重投影误差、尺度误差和平面度误差
+        NSGAOptimizer::IterationCallback callback = [&log_file_stream](int gen, const cv::Mat & popObjs, const cv::Mat & popVars) -> void {
+            double min_rep = 1e9, min_scale = 1e9, min_planar = 1e9;
+            double max_rep = -1e9, max_scale = -1e9, max_planar = -1e9;
+            for(int i = 0; i < popObjs.rows; ++i){
+                const double * f = popObjs.ptr<double>(i);
+                min_rep = std::min(min_rep, f[0]);
+                min_scale = std::min(min_scale, f[1]);
+                min_planar = std::min(min_planar, f[2]);
+                max_rep = std::max(max_rep, f[0]);
+                max_scale = std::max(max_scale, f[1]);
+                max_planar = std::max(max_planar, f[2]);
+            }
+            log_file_stream << gen + 1 << "," << min_rep << "," << min_scale << "," << min_planar << "," << max_rep << "," << max_scale << "," << max_planar << std::endl;
+            std::cout << "\rGen: " << gen + 1 << " Min Rep: " << min_rep << " Max Rep: " << max_rep << 
+                        " Min Scale: " << min_scale << " Max Scale: " << max_scale << 
+                        " Min Planar: " << min_planar << " Max Planar: " << max_planar << std::flush;
+        };
+
+        optics::NSGAOptimizer optimizer(problem, config);
+        optimizer.setIterationCallback(callback);
+        cv::Mat paretoObjs, paretoVars;
+        paretoVars = optimizer.optimize(paretoObjs);
+
+        if(paretoVars.empty()){
+            throw std::runtime_error("Calibration failed: NSGA-II optimization failed to find a solution.");
+        }
+
+        //将paretoObjs存入csv文件
+        std::ofstream paretoObjs_stream("result.csv");
+        if(!paretoObjs_stream.is_open()){
+            throw std::runtime_error("Calibration failed: Failed to open paretoObjs file.");
+        }
+        paretoObjs_stream << "index,obj1_min,obj2_min,obj3_min" << std::endl;
+        for(int i = 0; i < paretoObjs.rows; ++i){
+            const double * f = paretoObjs.ptr<double>(i);
+            paretoObjs_stream << i << "," << f[0] << "," << f[1] << "," << f[2] << std::endl;
+        }
+        paretoObjs_stream.close();
+        log_file_stream.close();
+
+        double ideal[3];
+        cv::minMaxLoc(paretoObjs.col(0), &ideal[0], nullptr);
+        cv::minMaxLoc(paretoObjs.col(1), &ideal[1], nullptr);
+        cv::minMaxLoc(paretoObjs.col(2), &ideal[2], nullptr);
+
+        // 寻找切比雪夫距离最小的解
+        int best_idx = 0;
+        double best_chebyshev = std::max({paretoObjs.at<double>(0,0) - ideal[0],
+                                        paretoObjs.at<double>(0,1) - ideal[1],
+                                        paretoObjs.at<double>(0,2) - ideal[2]});
+        for(int i = 1; i < paretoObjs.rows; ++i){
+            double cheb = std::max({paretoObjs.at<double>(i,0) - ideal[0],
+                                    paretoObjs.at<double>(i,1) - ideal[1],
+                                    paretoObjs.at<double>(i,2) - ideal[2]});
+            if(cheb < best_chebyshev){
+                best_chebyshev = cheb;
+                best_idx = i;
+            }
+        }
+        double best_reproj_err = paretoObjs.at<double>(best_idx, 0); // 选中解的obj1值
+        cv::Mat best_vars = paretoVars.row(best_idx);
+        BinoUWCamera bino_camera = problem->componentCamera(best_vars.ptr<double>(0));
+        if(out_rms != nullptr) *out_rms = best_reproj_err;
+        std::cout << std::endl;
+        return bino_camera;
     }
 }}

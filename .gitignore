@@ -22,3 +22,6 @@
 
 !third_party/
 !third_party/**
+
+!py/
+!py/**
